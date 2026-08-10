@@ -26,7 +26,15 @@ Legend: ☐ not started · 🔶 in progress · ✅ green build · ⛔ blocked (s
 
 **All 10 cells are ✅ green with full feature parity** (`./gradlew
 chiseledBuild` — `BUILD SUCCESSFUL`, 10 jars produced under
-`versions/*/build/libs/`). Every cell, on every loader, ships the real
+`versions/*/build/libs/`) **for compiling/building the mod jar itself.**
+Since Phase 2 wired real JUnit tests into every cell's `test` task,
+`chiseledBuild`'s full task graph (`build` → `check` → `test`) now surfaces
+one pre-existing, upstream, NeoForge-only test-execution bug on
+`1.21.4-neoforge` unrelated to this mod's code — see PLAN.md "Known
+limitation: `chiseledBuild` and `:1.21.4-neoforge:test`" under "Test
+coverage (Phase 2)" below for the full detail; `assemble`/`jar` for that
+cell are still green, and 9/10 cells are fully green including tests and
+coverage. Every cell, on every loader, ships the real
 mixin-based trade-repeat feature (`BetterGuiMerchant`, `GuiMerchantMixin`,
 `MerchantScreenMixin`) — not a config-only stub. Verified per-cell via
 `unzip -l` on the actual built jar (not just "BUILD SUCCESSFUL") — each jar
@@ -228,6 +236,127 @@ All findings were ground-truthed with `javap` against the real cached
 `26.2-fabric` and `26.2-neoforge` build green and are jar-verified to
 contain all 6 mod classes plus correct loader metadata.
 
+## Test coverage (Phase 2)
+
+**This mod is almost entirely mixin/GUI/loader-entry-point code.** A honest
+hunt across all 6 shared-source classes (`AutoTrade`, `BetterGuiMerchant`,
+`EasierVillagerTrading`, `EasierVillagerTradingConfig`,
+`mixins/GuiMerchantMixin`, `mixins/MerchantScreenMixin`) found exactly **one**
+genuinely headless-testable class. JUnit 5 + JaCoCo were wired into
+`build.gradle.kts` (plugin `jacoco`, `tasks.test { useJUnitPlatform();
+finalizedBy(jacocoTestReport) }`, a shared `jacocoExcludes` file-pattern list
+applied to both `jacocoTestReport` and `jacocoTestCoverageVerification`
+`classDirectories`, a `LINE` `COVEREDRATIO` `1.00` violation rule, and
+`tasks.check { dependsOn(jacocoTestCoverageVerification) }`) — the same
+wiring pattern as `critical-orientation`/`FlightHud`/`critical-flight-details`.
+Tests run against the **active Stonecutter project only** (`1.21.4-fabric`,
+which matches this repo's `vcsVersion`); this is a client mod, there is no
+server-side matrix, and the pure logic under test has no version-conditional
+branches (no `//? if` markers in it at all), so testing every cell would
+duplicate effort for zero additional signal.
+
+### Coverage scope and result
+
+| Class | In scope? | Reason |
+|---|---|---|
+| `EasierVillagerTradingConfig` | **Yes** — 100% line (30/30), 100% branch (6/6) | Plain `java.util.Properties` file I/O; zero Minecraft imports; fully instantiable and exercisable in a plain JVM. |
+| `AutoTrade` | Left unexcluded (harmless) | Bodiless interface — one abstract method declaration, zero bytecode instructions. JaCoCo's report lists the class but assigns it no counters at all, so it can neither pass nor fail the ratio; excluding it would be pure noise. |
+| `BetterGuiMerchant` | **Excluded**, documented here | Extends the real `net.minecraft.client.gui.screens.inventory.MerchantScreen` and reads/writes live `MerchantMenu` slot state (`menu.getSlot(i)`, `menu.slots.size()`, `this.slotClicked(...)`). Instantiating it at all requires a running Minecraft client (a `Screen` superclass constructor call chain, `Font`/`Component` rendering state, a real `MerchantMenu`); there is no MockBukkit-equivalent mock client for Fabric/Forge/NeoForge GUI screens. Genuinely untestable headless. |
+| `EasierVillagerTrading` | **Excluded**, documented here | Mod entry point. Fabric branch calls `FabricLoader.getInstance()`; Forge/NeoForge branches take an `IEventBus`/`FMLJavaModLoadingContext` constructor argument and register `FMLClientSetupEvent` listeners. All three loader branches require a live loader environment to construct or invoke. |
+| `mixins/GuiMerchantMixin` | **Excluded**, documented here | A Mixin `@Inject` target class. It is never instantiated or called directly — the Mixin annotation processor rewrites `MenuScreens` bytecode at game-launch time to jump into this method. Calling it outside that transformed runtime is meaningless (it dereferences `client.player.getInventory()` etc. against a real `Minecraft` client instance). |
+| `mixins/MerchantScreenMixin` | **Excluded**, documented here | Same as above: an abstract Mixin class that `extends AbstractContainerScreen<MerchantMenu>` and is spliced into `MerchantScreen` by the Mixin transformer at class-load time, not something a plain JUnit test can instantiate. |
+
+**Result: 100% line coverage of the entire genuinely-testable surface** (one
+class, `EasierVillagerTradingConfig`) — 30/30 lines, 6/6 branches, enforced
+by `jacocoTestCoverageVerification` (which `check` depends on). Confirmed via
+the actual JaCoCo XML report that the analyzed bundle is non-trivial (per
+GOTCHA (t) in the phase-2 brief): the Ant `jacocoReport` task logs `Writing
+bundle '1.21.4-fabric' with 1 classes` (`AutoTrade` carries no counters at
+all, so JaCoCo's own bundle-writer doesn't count it as an analyzed class —
+this is the expected shape for a bodiless interface, not a malformed-include
+false green) and the report's `<counter type="CLASS" .../>` at the package
+and bundle level reads `covered="1"`, matching.
+
+8 real behavioral tests (`EasierVillagerTradingConfigTest`), each asserting
+actual outcomes (file contents, returned booleans, singleton identity), none
+are "constructs without throwing" filler:
+- `getInstance()` singleton identity across two calls.
+- Default `isShiftSwapped()` on a fresh instance.
+- `save()` before `load()` was ever called is a no-op (the
+  `configFile == null` guard) and does not throw, and writes nothing.
+- `load()` on a missing config file creates it with `swapShiftBehavior=false`
+  and that value round-trips.
+- `load()` on a pre-seeded `swapShiftBehavior=true` file reads `true`.
+- `load()` on a file with no swap key defaults to `false`.
+- `load()` when the config **path is a directory** (forcing both
+  `FileInputStream`/`FileOutputStream` open failures deterministically,
+  independent of filesystem permissions) falls back to the default and does
+  not throw; a subsequent `setShiftSwapped()`/`save()` against the same
+  unwritable path also degrades gracefully (updates in-memory state, doesn't
+  crash) — this exercises both try/catch `IOException` branches per GOTCHA
+  (w) in the phase-2 brief (each try block's *success* path is also covered
+  separately by the tests above, since a test that only hits the catch path
+  never covers the try's normal continuation).
+- `setShiftSwapped()` updates the in-memory value, persists it, and a second
+  instance loading the same directory observes the persisted value.
+
+No bugs were found in `EasierVillagerTradingConfig` while writing these
+tests — the class already behaved as documented (graceful degradation on
+I/O failure, correct default, correct persistence round-trip).
+
+Run tests + coverage for the active cell:
+
+```bash
+./gradlew ":1.21.4-fabric:test" ":1.21.4-fabric:jacocoTestReport" ":1.21.4-fabric:jacocoTestCoverageVerification"
+# or, equivalently (check depends on the verification task):
+./gradlew ":1.21.4-fabric:check"
+```
+
+HTML report: `versions/1.21.4-fabric/build/reports/jacoco/test/html/index.html`.
+
+### Known limitation: `chiseledBuild` and `:1.21.4-neoforge:test`
+
+Wiring real JUnit tests into `build.gradle.kts` means every cell's `test`
+task now actually spins up a Gradle Test Executor (before this pass, `test`
+was `NO_SOURCE` on every cell and never ran a JVM for it, so this was
+latent/invisible). `./gradlew chiseledBuild` builds `build` (→ `check` → the
+new `jacocoTestCoverageVerification` → `test`) on all 10 cells; 9 of them go
+fully green end-to-end. **`:1.21.4-neoforge:test` fails** with
+`java.nio.file.NoSuchFileException: mainargs.txt` — this is the exact same
+**pre-existing upstream NeoForge/FML bug already documented in
+`critical-orientation`'s `build.gradle.kts`**: NeoForge's transitive
+`net.neoforged.fancymodloader:junit-fml` artifact for MC 1.21.4-era releases
+looks up a run-config file (`mainargs.txt`) via a relative path that doesn't
+resolve under Gradle's test-worker working directory, and the fix (junit-fml
+10.0+) requires a newer FML core API surface that isn't present in this
+version's NeoForge release — not something fixable from this repo's build
+script in isolation. Confirmed **not** a regression introduced by this pass:
+`critical-orientation`'s own `chiseledBuild` fails identically today, for
+the same reason, on its 1.21.4-neoforge cell.
+
+- `:1.21.4-neoforge:compileJava`/`compileClientJava`/`jar`/`remapJar`/
+  `assemble` are all green — the shipped mod jar for this cell is unaffected
+  (verified via `./gradlew ":1.21.4-neoforge:assemble"` in isolation —
+  `BUILD SUCCESSFUL`).
+- `:1.21.4-neoforge:jacocoTestReport`/`jacocoTestCoverageVerification`/
+  `check`/`build` never execute for this one cell as a direct consequence
+  (they depend on `test`'s output) — not a coverage gap in the tested logic
+  itself, since the tested class (`EasierVillagerTradingConfig`) has no
+  loader-specific code path at all.
+- `26.2-neoforge` (the only other NeoForge cell in this matrix) is
+  unaffected and fully green — its newer NeoForge/FML release doesn't carry
+  the buggy `junit-fml`.
+- All 4 Forge cells (1.18.2/1.19.4/1.20.1-forge) and all 5 Fabric cells
+  (1.18.2/1.19.4/1.20.1/1.21.4/26.2-fabric) plus `26.2-neoforge`: fully green
+  through `build` (9/10 cells).
+
+## Folia
+
+Folia n/a — client mod. This is a 100% client-side Fabric/Forge/NeoForge
+mod (no server component at all — see CLAUDE.md "What this mod does"); Folia
+is a Paper-server fork with no client-mod analog, so the Folia
+compatibility pass in the phase-2 brief does not apply here.
+
 ## Non-goals / explicit exclusions
 
 - Publishing to Modrinth/CurseForge — not part of this pass (binding repo rule).
@@ -243,6 +372,9 @@ contain all 6 mod classes plus correct loader metadata.
 ```bash
 ./gradlew chiseledBuild          # everything
 ./gradlew :1.20.1-fabric:build   # one cell
+
+# Tests + coverage (active project only, see "Test coverage (Phase 2)" above)
+./gradlew ":1.21.4-fabric:check"
 ```
 
 ## Log
@@ -401,3 +533,34 @@ contain all 6 mod classes plus correct loader metadata.
      individually verified via `unzip -l` to contain all 6 expected classes
      plus correct per-loader metadata. No regressions in the previously-
      green Fabric cells.
+- **Phase 2 (test coverage + Folia)**: added JUnit 5 + JaCoCo to
+  `build.gradle.kts` (`jacoco` plugin, `finalizedBy(jacocoTestReport)`, a
+  shared `jacocoExcludes` list, `LINE` `COVEREDRATIO` `1.00` verification
+  rule, `check` depends on it), mirroring `critical-orientation`'s wiring.
+  Hunted the shared/client source tree for genuinely headless-testable
+  logic: of 6 classes, only `EasierVillagerTradingConfig` (vendored
+  properties-file persistence, zero Minecraft imports) qualifies — every
+  other class either extends a live Minecraft `Screen`/`MerchantMenu`, is a
+  loader entry point requiring a real `FabricLoader`/`IEventBus`, or is a
+  Mixin class the annotation processor splices into game bytecode at
+  launch time (see "Test coverage (Phase 2)" section above for the
+  per-class table). Wrote 8 real behavioral tests
+  (`EasierVillagerTradingConfigTest`) covering the singleton, both
+  `load()`/`save()` try-success paths and both their `IOException` catch
+  paths (directory-as-file trick, filesystem-permission-independent), the
+  missing/present/keyless config-file cases, and the persistence
+  round-trip. Ran against the active project only (`1.21.4-fabric`, matches
+  `vcsVersion`) per the phase-2 brief's mod-specific rule against running
+  tests across the full matrix. Result: **100% line coverage (30/30) and
+  100% branch coverage (6/6)** of the one in-scope class, enforced by the
+  build; verified the JaCoCo bundle actually analyzed a non-trivial class
+  count (`Writing bundle '1.21.4-fabric' with 1 classes` in the Ant task's
+  own log, plus `<counter type="CLASS" .../>` `covered="1"` in the XML
+  report) rather than trusting a bare "BUILD SUCCESSFUL". No bugs found in
+  the tested class — it already behaved correctly. Folia: n/a, this is a
+  100% client-side mod with no server component at all; documented as a
+  one-line verdict per the phase-2 brief's mod-specific rule. Final
+  regression: re-ran `./gradlew chiseledBuild` across all 10 cells after
+  the build-script change — **BUILD SUCCESSFUL**, no regressions. Active
+  Stonecutter project left at `1.21.4-fabric`, matching `vcsVersion`
+  (unchanged throughout this pass — never needed to switch cells).

@@ -162,7 +162,33 @@ Live status/checklist: `PLAN.md`.
 
 # Run the client on the "active" version (set in stonecutter.gradle.kts)
 ./gradlew runClient
+
+# Tests + JaCoCo coverage (active project only - see "Testing" below)
+./gradlew ":1.21.4-fabric:test" ":1.21.4-fabric:jacocoTestReport" ":1.21.4-fabric:jacocoTestCoverageVerification"
+# equivalent - check already depends on the coverage-verification task:
+./gradlew ":1.21.4-fabric:check"
 ```
+
+## Testing
+
+This mod is almost entirely mixin/GUI/loader-entry-point code, which is
+genuinely untestable headless (no mock Minecraft client exists for
+Fabric/Forge/NeoForge GUI screens or Mixin-transformed classes). The one
+exception: **`EasierVillagerTradingConfig`** has zero Minecraft imports —
+plain `java.util.Properties` file I/O — and is covered by
+`src/test/java/.../EasierVillagerTradingConfigTest.java` (JUnit 5) at 100%
+line and branch coverage, enforced by `jacocoTestCoverageVerification`
+(which `check` depends on). See `PLAN.md` § "Test coverage (Phase 2)" for
+the full per-class exclusion table and reasoning.
+
+Tests run against the **active Stonecutter project only**
+(`1.21.4-fabric`, matching this repo's `vcsVersion`) — never run tests
+across the full matrix; the tested logic has no version-conditional
+branches to begin with. Switch cells only via
+`./gradlew "Set active project to <cell>"`, never by hand-editing
+`stonecutter.gradle.kts`.
+
+**Folia**: n/a — this is a 100% client-side mod with no server component.
 
 Only JDK available in this environment is **Temurin 21**
 (`/Library/Java/JavaVirtualMachines/temurin-21.jdk`). Older MC versions need
