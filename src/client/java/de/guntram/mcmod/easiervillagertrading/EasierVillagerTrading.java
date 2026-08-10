@@ -18,12 +18,23 @@ import net.minecraftforge.fml.loading.FMLPaths;
 *///?}
 
 /**
- * Mod entry point. On Fabric this loads the (vendored) config and relies on
- * fabric.mod.json to wire up the mixins that do the actual work. NeoForge
- * and Forge builds currently only load config on client setup - the
- * merchant-screen mixins have not been ported to Mojang-mapped targets yet,
- * see PLAN.md.
+ * Mod entry point. Loads the (vendored) config on client setup; the actual
+ * merchant-screen mixins (BetterGuiMerchant, GuiMerchantMixin,
+ * MerchantScreenMixin - see mixins.easiervillagertrading.json) are wired up
+ * per-loader via fabric.mod.json ("client" entrypoint + mixins array) on
+ * Fabric, and via mods.toml/neoforge.mods.toml's [[mixins]] block on
+ * Forge/NeoForge - see PLAN.md.
  */
+// Forge/NeoForge reflectively instantiate whichever class in the mod jar
+// carries @Mod(modid) (scanning for the annotation on the TYPE, not on a
+// constructor - putting it on the constructor instead compiles as "annotation
+// type not applicable to this kind of declaration", caught by an actual
+// compileClientJava run against real Forge-mapped classes). Fabric has no
+// class-level annotation equivalent; entrypoints are declared in
+// fabric.mod.json instead.
+//? if forge || neoforge {
+/*@Mod(EasierVillagerTrading.MODID)
+*///?}
 public class EasierVillagerTrading
 //? if fabric {
 implements ClientModInitializer
@@ -39,8 +50,7 @@ implements ClientModInitializer
         loadConfig(FabricLoader.getInstance().getConfigDir().toFile());
     }
     //?} elif neoforge {
-    /*@Mod(MODID)
-    public EasierVillagerTrading(IEventBus modEventBus) {
+    /*public EasierVillagerTrading(IEventBus modEventBus) {
         modEventBus.addListener(this::onClientSetup);
     }
 
@@ -48,8 +58,7 @@ implements ClientModInitializer
         loadConfig(FMLPaths.CONFIGDIR.get().toFile());
     }
     *///?} elif forge {
-    /*@Mod(MODID)
-    public EasierVillagerTrading() {
+    /*public EasierVillagerTrading() {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onClientSetup);
     }
 

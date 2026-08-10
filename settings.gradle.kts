@@ -35,19 +35,12 @@ stonecutter {
         // split). Quilt is not a separate cell - it runs Fabric jars natively.
 
         // Newest stable Minecraft per https://meta.fabricmc.net/v2/versions/game
-        // (checked live - do not trust training-data memory) is 26.2. Mojang
-        // moved to calendar versioning and, from 26.1 on, ships the game
-        // unobfuscated with its own official names baked in - there is no
-        // separate Yarn/Mojmap mapping artifact to wait for, the obfuscation
-        // step this whole mapping ecosystem exists for is simply gone. This
-        // corrects an earlier read of the same evidence (empty Yarn mapping
-        // list, no client_mappings in Mojang's manifest) as a "missing
-        // mappings" blocker - it isn't one, it's the intended new shape.
-        // Kept commented here pending a dedicated toolchain-support pass
-        // (Loom/NeoGradle version pinning for the unobfuscated model) rather
-        // than adding it speculatively without a verified green build - see
-        // PLAN.md "26.2" section for current status.
-        // mc("26.2", "fabric", "neoforge")
+        // (checked live - do not trust training-data memory) is 26.2. The
+        // house template critical-orientation proved this whole toolchain
+        // (Gradle 9.7.0 + this same Stonecraft/Loom stack) builds 26.2-fabric
+        // and 26.2-neoforge green - see that repo's PLAN.md - so this is no
+        // longer speculative.
+        mc("26.2", "fabric", "neoforge")
 
         // 1.21.4 - Fabric + NeoForge (last classic-numbered Yarn-mapped target)
         mc("1.21.4", "fabric", "neoforge")

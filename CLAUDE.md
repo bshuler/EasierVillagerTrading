@@ -204,5 +204,22 @@ JDK, never touch Homebrew for this.
   crossing 1.19→1.20. Expect more of this pattern (method renamed, same
   semantics) going from 1.20.4 → 1.21.4 → 26.2, especially around item
   components (the 1.20.5 item-stack rewrite) — check compile errors first.
+- **26.2 API changes actually hit** (all javap-confirmed against the real
+  cached `minecraft-common-deobf-26.2.jar`/`minecraft-clientonly-deobf-26.2.jar`,
+  handled via a new `//? if <26.2 { ... } //?} else { ... //?}` split
+  alongside the `<1.20.5` one): `net.minecraft.world.inventory.ClickType`
+  was removed, replaced 1:1-by-constant-name with
+  `net.minecraft.world.inventory.ContainerInput` (do not confuse with
+  `ClickAction`, an unrelated 2-constant mouse-button enum that also exists
+  in 26.2 and sounds like the replacement but isn't);
+  `Screen.hasControlDown()`/`hasShiftDown()` were removed from `Screen`
+  entirely and now only exist as instance methods on `KeyEvent`/
+  `MouseButtonEvent` (via `InputWithModifiers`) — this mod's mixins have no
+  such event object at their injection points, so the 26.2 branch reads the
+  raw key state via `InputConstants.isKeyDown(Minecraft.getInstance()
+  .getWindow(), InputConstants.KEY_LCONTROL/…)` instead; and
+  `Minecraft.setScreen(Screen)` was renamed `setScreenAndShow(Screen)`. See
+  `PLAN.md`'s 26.2 per-version-plan entry for the full detail and the exact
+  files/methods touched.
 - Config is intentionally minimal (one boolean). Do not reintroduce a
   ModMenu/GBfabrictools dependency without re-reading the reasoning above.

@@ -16,23 +16,27 @@ not from training memory).
 
 | MC version | Fabric | NeoForge | Forge |
 |---|---|---|---|
-| 26.2 | ⛔ (see below) | ⛔ (see below) | n/a (NeoForge-era) |
-| 1.21.4 | ✅ | ✅ | n/a (NeoForge-era) |
-| 1.20.1 | ✅ | n/a (pre-split) | ✅ |
-| 1.19.4 | ✅ | n/a | ✅ |
-| 1.18.2 | ✅ | n/a | ✅ |
+| 26.2 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.4 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.20.1 | ✅ full feature | n/a (pre-split) | ✅ full feature |
+| 1.19.4 | ✅ full feature | n/a | ✅ full feature |
+| 1.18.2 | ✅ full feature | n/a | ✅ full feature |
 
 Legend: ☐ not started · 🔶 in progress · ✅ green build · ⛔ blocked (see notes)
 
-**All 8 mandatory cells are ✅ green** (`./gradlew chiseledBuild` — `BUILD
-SUCCESSFUL`, 8 jars produced under `versions/*/build/libs/`). Fabric cells
-have the full mixin-based trade-repeat feature; Forge/NeoForge cells
-currently compile a **feature stub** (config-loading only — the
-`//? if fabric { ... } //?}`-guarded classes compile to package-only files
-on those loaders) — see "Why Fabric first, Forge/NeoForge second" below for
-why, and treat that gap as the next unit of work, not as this pass's bar.
-**26.2** is excluded from this pass — see its own section below; it is not
-silently dropped, it is a recorded, specific ⛔.
+**All 10 cells are ✅ green with full feature parity** (`./gradlew
+chiseledBuild` — `BUILD SUCCESSFUL`, 10 jars produced under
+`versions/*/build/libs/`). Every cell, on every loader, ships the real
+mixin-based trade-repeat feature (`BetterGuiMerchant`, `GuiMerchantMixin`,
+`MerchantScreenMixin`) — not a config-only stub. Verified per-cell via
+`unzip -l` on the actual built jar (not just "BUILD SUCCESSFUL") — each jar
+contains all 6 expected classes (`AutoTrade`, `BetterGuiMerchant`,
+`EasierVillagerTrading`, `EasierVillagerTradingConfig`,
+`mixins/GuiMerchantMixin`, `mixins/MerchantScreenMixin`) plus the correct
+loader metadata (`fabric.mod.json` / `META-INF/mods.toml` /
+`META-INF/neoforge.mods.toml`, all with `mixins.easiervillagertrading.json`).
+See the Log for the session that closed the Forge/NeoForge feature-parity
+gap and extended the matrix to 26.2.
 
 This checklist is updated in place as work lands — check the latest commit
 for current status, this is not a historical log.
@@ -66,15 +70,40 @@ therefore original work for this fork, not a re-application of an upstream
 port. See `CLAUDE.md` § "Why mixins make Forge/NeoForge harder than the
 template" for the mechanics.
 
-**Sequencing:** get all 5 MC versions green on Fabric first (direct,
+**Sequencing:** got all versions green on Fabric first (direct,
 high-confidence port from upstream's own `fabric_1_18`/`fabric_1_19`/
 `fabric_1_20` branches — those three are byte-for-byte identical in the mixin
-logic). Then port the mixin feature to NeoForge/Forge, version by version,
-newest first, against Mojang mappings, so every cell reaches feature parity,
-not just a compiling stub. Current state: Forge/NeoForge cells compile with
-config-loading only (mixin feature not yet ported — see per-version plan
-below and the "Open problems" log entries); closing that gap is the top
-priority remaining item, tracked per-cell in the table above.
+logic). The mixin feature has since been ported to NeoForge/Forge too — see
+the Log entry "Forge/NeoForge feature-parity pass" below for how. **All
+loaders on all target versions now ship the real feature**, not a stub.
+
+Porting mechanics that made this non-trivial (kept here for whoever touches
+this next):
+- Forge and NeoForge both reject Loom's `splitEnvironmentSourceSets()`
+  (`Using Forge/NeoForge with split jars is not supported!` — neither loader
+  ships split client/server jars). So `src/client/java` cannot use the same
+  Fabric-only source-set-split mechanism; instead `build.gradle.kts` merges
+  it into a hand-created `client` sourceSet whose classpath/configurations/
+  jar-inclusion are wired manually (Gradle gives a custom-named sourceSet
+  none of that by default — only `"test"` gets automatic `extendsFrom`
+  wiring). See the comments in `build.gradle.kts` for the full mechanism and
+  the two Gradle pitfalls hit while wiring it (a circular task dependency,
+  and a "Property has implicit dependency" validation failure against
+  Forge's `generatePackMCMetaJson` task caused by putting the resources dir
+  on the client sourceSet's compileClasspath — fixed by scoping to
+  `classesDirs` only).
+- Forge/NeoForge's `@Mod` annotation is `@Target(ElementType.TYPE)`-only —
+  it must sit on the class declaration, not the constructor. A first attempt
+  at porting `EasierVillagerTrading.java` put it on the constructor and
+  failed with "annotation type not applicable to this kind of declaration"
+  the first time that file's Forge/NeoForge branch actually compiled (it
+  never had before, since those cells were config-only stubs).
+- The mixin *targets* (`MerchantScreen.postButtonClick()`/`shopItem`,
+  `MenuScreens.create()`) needed no change between Fabric/Forge/NeoForge —
+  all three loaders share the same Mojang-official mapping under this
+  Stonecraft/Loom setup (confirmed via javap against the real per-loader
+  compile classpaths for every version 1.18.2–1.21.4). Only the build
+  wiring above was loader-specific, not the mixin code itself.
 
 ## Single merged jar (Forgix) — investigated, not wired in this pass
 
@@ -118,33 +147,34 @@ docs). This is a revisit, not a rejection.
 
 ## Per-version plan
 
-### 1.18.2 — Fabric ✅ · Forge ✅ (compiles; Forge is a feature stub)
+### 1.18.2 — Fabric ✅ · Forge ✅ (full feature parity)
 Base: upstream `fabric_1_18` (targets 1.18.2 exactly). Direct port: drop
 GBfabrictools/ModMenu dependency (see CLAUDE.md), adjust package `fabric.mod.json`
 entrypoints, wire into Stonecutter cell `1.18.2-fabric`. **Green.**
 Forge: no upstream Forge branch for 1.18.2 exists (upstream's last Forge
-branch is `legacy_1_12_2`). Compiles green today only because the
-mixin/`BetterGuiMerchant` classes are Stonecutter-guarded to
-Fabric-only (package-only file on Forge). Re-deriving the mixin targets
-against Mojang mappings for 1.18.2 — the actual feature port — is still
-open work, not blocked, just not done in this pass.
+branch is `legacy_1_12_2`), so this loader is original work for the fork.
+Mixin targets re-derived against Mojang mappings (same names as Fabric's
+Mojmap layer, confirmed via javap — see "Why Fabric first..." above); jar
+verified to contain all 6 mod classes plus `META-INF/mods.toml`.
 
-### 1.19.4 — Fabric ✅ · Forge ✅ (compiles; Forge is a feature stub)
+### 1.19.4 — Fabric ✅ · Forge ✅ (full feature parity)
 Base: upstream `fabric_1_19` (targets 1.19.3; mixin/logic code identical to
 1.18.2 and 1.20 branches — only the `Versionfiles/mcversion-*.properties`
 differs). 1.19.3 → 1.19.4 needed no rename in the touched classes. **Green.**
-Forge: same situation as 1.18.2 — no upstream branch, compiles as a stub,
-feature port still open.
+Forge: same situation as 1.18.2 — no upstream branch, original fork work,
+now feature-complete and jar-verified.
 
-### 1.20.1 — Fabric ✅ · Forge ✅ (compiles; Forge is a feature stub)
+### 1.20.1 — Fabric ✅ · Forge ✅ (full feature parity)
 Base: upstream `fabric_1_20` (last commit targets 1.20.4; only one rename
 vs 1.19 branch: `ItemStack.areNbtEqual` → `canCombine`). Compiled clean
 against 1.20.1 with no further rename needed beyond that one. **Green.**
 Forge: 1.20.1 is the last Forge (pre-NeoForge-split) version in the target
-matrix — compiles as a stub (same mixin-guard mechanism), feature port
-still open.
+matrix — feature-complete and jar-verified. This is also the cell that
+surfaced the Forge-specific `generatePackMCMetaJson`/client-sourceSet
+Gradle validation failure (see build.gradle.kts comments); fixed there and
+confirmed it does not recur on any other Forge cell.
 
-### 1.21.4 — Fabric ✅ · NeoForge ✅ (compiles; NeoForge is a feature stub)
+### 1.21.4 — Fabric ✅ · NeoForge ✅ (full feature parity)
 Base: upstream `fabric_1_20`, hand-advanced. The only extra fix needed to
 get this cell (and every other cell) compiling was unrelated to Yarn
 renames: (1) moving every Minecraft-touching class from `src/main/java` to
@@ -152,21 +182,51 @@ renames: (1) moving every Minecraft-touching class from `src/main/java` to
 has no Minecraft classpath at all), and (2) fixing the resource-template
 placeholders (`${mod_id}` etc. don't exist in Stonecraft — see Log). No
 item-component-rewrite renames were actually hit in this class set. **Green.**
-NeoForge: original work; no upstream branch. Compiles as a stub (same
-mixin-guard mechanism as Forge cells above); matches
-`critical-orientation`'s own matrix. Feature port still open.
+NeoForge: original work; no upstream branch. Now feature-complete
+(mixin-based trade-repeat), jar-verified; confirmed NeoForge does **not**
+hit the `generatePackMCMetaJson` validation issue Forge cells hit (NeoForge
+registers no such task).
 
-### 26.2 (newest stable) — Fabric ⛔ · NeoForge ⛔ — excluded from this pass
-**Exact blocker**: not a code or ecosystem blocker — MC 26.1+ ships
-unobfuscated with Mojang's own class names built in, so there is no missing
-mapping artifact to wait for. The blocker is that **Loom/NeoGradle
-toolchain support for building against an unobfuscated 26.x client jar has
-not been verified** against the Stonecraft/Stonecutter/Loom plugin versions
-pinned by this repo (`gg.meza.stonecraft:1.12.+`, `dev.kikugie.stonecutter:0.9.+`).
-Enabling `mc("26.2", "fabric", "neoforge")` in `settings.gradle.kts` without
-first confirming that support exists would burn time chasing toolchain
-errors indistinguishable from code errors. Kept commented out, pending a
-dedicated verification pass; not silently dropped from the matrix.
+### 26.2 (newest stable) — Fabric ✅ · NeoForge ✅ (full feature parity)
+No longer blocked — the house template `critical-orientation` proved the
+Gradle 9.7.0 + Stonecraft/Loom toolchain builds 26.2-fabric/26.2-neoforge
+green, so the earlier "unverified toolchain" blocker no longer applies.
+Porting the mixin feature itself to 26.2 required real, javap-confirmed
+upstream API changes beyond the earlier 1.20.5 item-component rewrite
+(all version-conditioned with a fresh `//? if <26.2 { ... } //?} else {
+... //?}` split alongside the existing `<1.20.5` one):
+- `net.minecraft.world.inventory.ClickType` was removed; its 4th-parameter
+  role in `AbstractContainerScreen.slotClicked(Slot, int, int, X)` is now
+  played by `net.minecraft.world.inventory.ContainerInput` — a same-named-
+  constants enum (`PICKUP`/`QUICK_MOVE`/`SWAP`/`CLONE`/`THROW`/`PICKUP_ALL`,
+  plus a new `QUICK_CRAFT`), i.e. a straight rename for this mod's purposes,
+  not a semantic redesign. (Note: `net.minecraft.world.inventory.ClickAction`
+  also exists in 26.2 but is an unrelated, much smaller enum — only
+  `PRIMARY`/`SECONDARY`, a mouse-button concept — and is *not* the
+  replacement for `ClickType`; easy to confuse by name.)
+- `Screen.hasControlDown()`/`hasShiftDown()` (static utility methods through
+  1.21.4) no longer exist on `Screen` — confirmed via javap returning no
+  such methods. The same behavior moved onto a per-input-event instance
+  method (`net.minecraft.client.input.InputWithModifiers`, implemented by
+  the new `KeyEvent`/`MouseButtonEvent` record types). This mod's mixin
+  injection points (`postButtonClick` RETURN, and `BetterGuiMerchant.trade()`)
+  have no such event object available, so the 26.2 branch reads the raw key
+  state directly instead, via `com.mojang.blaze3d.platform.InputConstants
+  .isKeyDown(Minecraft.getInstance().getWindow(), InputConstants.KEY_LCONTROL
+  /KEY_RCONTROL/KEY_LSHIFT/KEY_RSHIFT)` — the same primitive the old
+  `Screen.hasControlDown()`/`hasShiftDown()` themselves wrapped.
+- `Minecraft.setScreen(Screen)` was renamed `setScreenAndShow(Screen)`
+  (confirmed via javap: only `setScreenAndShow` exists on the real 26.2
+  `Minecraft.class`).
+- The mixin *targets* did **not** need to change: `MerchantScreen` still has
+  the same private `shopItem` field, private `postButtonClick()` method, and
+  `(MerchantMenu, Inventory, Component)` constructor in 26.2 (confirmed via
+  javap against the real cached 26.2 deobfuscated jars).
+All findings were ground-truthed with `javap` against the real cached
+`minecraft-common-deobf-26.2.jar`/`minecraft-clientonly-deobf-26.2.jar`
+(Gradle's Loom cache), never assumed from training-data memory. Both
+`26.2-fabric` and `26.2-neoforge` build green and are jar-verified to
+contain all 6 mod classes plus correct loader metadata.
 
 ## Non-goals / explicit exclusions
 
@@ -286,3 +346,58 @@ dedicated verification pass; not silently dropped from the matrix.
   placeholders this repo had — it will hit the identical
   `MissingPropertyException: mod_id` the first time its `processResources`
   actually runs, unless already fixed independently.
+- **Forge/NeoForge feature-parity pass, and 26.2 matrix extension.** Two
+  gaps closed in this session:
+  1. Forge and NeoForge cells were still config-only stubs (the mixin
+     feature was Fabric-only). Ported it for real. The real work was almost
+     entirely Gradle plumbing, not mixin-target renames (mixin targets are
+     identical across all three loaders, per the javap evidence already in
+     `BetterGuiMerchant.java`'s header comment). Root problem: Loom's
+     `splitEnvironmentSourceSets()` throws
+     `UnsupportedOperationException` on both Forge and NeoForge (`"Using
+     Forge/NeoForge with split jars is not supported!"`), so `src/client/java`
+     needed a different wiring path for `mod.isForgeLike` cells. First
+     attempt (bolting an extra `srcDir` onto the existing `main` sourceSet)
+     produced a **green build that silently shipped an empty jar** — exactly
+     the failure mode this task was warned about — because Stonecutter's
+     per-cell code generation is keyed off the literal sourceSet name
+     (`stonecutterGenerate<Name>` reads `src/<name>/java`/writes
+     `build/generated/stonecutter/<name>/...`); it has no generic "scan every
+     srcDir on every sourceSet" behavior, so a same-named `client` folder
+     tacked onto `main` is invisible to it. Fixed by creating a genuine
+     `sourceSets.create("client")` and hand-wiring its
+     classpath/configurations (`clientImplementation` etc. don't
+     automatically `extendsFrom` the main configs — only `"test"` gets that
+     for free) and jar inclusion (`tasks.named<Jar>("jar") { from(...) }`,
+     deliberately *not* also adding `classes.dependsOn(clientClasses)`,
+     which creates a real Gradle task cycle since `compileClientJava`'s
+     classpath already makes Gradle infer `compileClientJava -> classes` on
+     its own). Also hit and fixed the "Property has implicit dependency"
+     Gradle validation failure this task's gotcha list called out in
+     advance: giving the client sourceSet's compileClasspath the *full*
+     main sourceSet output (which bundles the resources dir) collided with
+     Forge's `generatePackMCMetaJson` task writing `pack.mcmeta` into that
+     same directory — fixed by scoping the client compileClasspath to
+     `classesDirs` only. Separately found and fixed a real (previously
+     uncaught) bug in `EasierVillagerTrading.java`: `@Mod(MODID)` was on the
+     constructor, but Forge/NeoForge's `@Mod` is `@Target(ElementType.TYPE)`
+     — moved to the class declaration. Confirmed via `unzip -l` on every
+     built jar (not just "BUILD SUCCESSFUL") that all 6 mod classes and
+     correct loader metadata now ship on every Forge/NeoForge cell.
+  2. Extended the matrix to **26.2** (both Fabric and NeoForge), following
+     `critical-orientation` proving the toolchain itself works at that
+     version. Porting the actual mixin code required three real,
+     javap-confirmed upstream API changes beyond the existing
+     `isSameItemSameTags`→`isSameItemSameComponents` split — see the 26.2
+     entry in "Per-version plan" above for the exact renames
+     (`ClickType`→`ContainerInput`, `Screen.hasControlDown/hasShiftDown`
+     relocated off `Screen` entirely, `Minecraft.setScreen`→
+     `setScreenAndShow`). All three handled with a new `//? if <26.2 { ...
+     } //?} else { ... //?}` conditional in `BetterGuiMerchant.java`,
+     `MerchantScreenMixin.java`, and `GuiMerchantMixin.java`.
+  3. Re-ran `./gradlew chiseledBuild` across the full 10-cell matrix
+     (1.18.2/1.19.4/1.20.1 × fabric+forge, 1.21.4/26.2 × fabric+neoforge)
+     after all fixes — **BUILD SUCCESSFUL**, and every single cell's jar was
+     individually verified via `unzip -l` to contain all 6 expected classes
+     plus correct per-loader metadata. No regressions in the previously-
+     green Fabric cells.
