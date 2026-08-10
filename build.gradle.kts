@@ -2,6 +2,7 @@ import gg.meza.stonecraft.mod
 
 plugins {
     id("gg.meza.stonecraft")
+    jacoco
 }
 
 // Without one of these two branches, Gradle never learns that src/client/java
@@ -86,4 +87,68 @@ modSettings {
         darkBackground = true
         musicVolume = 0.0
     }
+}
+
+dependencies {
+    // Testing
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+// JaCoCo scope: this mod is almost entirely mixin/GUI/loader-entry-point code, all of which
+// touches real Minecraft client classes (MerchantScreen, MerchantMenu, FabricLoader, Mixin
+// injection targets) at class-load or call time and is genuinely untestable headless - see
+// CLAUDE.md/PLAN.md "Testing" for the full reasoning per class. Only
+// EasierVillagerTradingConfig (plain-old Properties-file I/O, no Minecraft import at all) is
+// in scope for the 100% line-coverage bar. AutoTrade is a bodiless interface (no bytecode
+// instructions to cover either way) and is left unexcluded since it can't affect the ratio.
+val jacocoExcludes = listOf(
+    "de/guntram/mcmod/easiervillagertrading/BetterGuiMerchant.class",
+    "de/guntram/mcmod/easiervillagertrading/BetterGuiMerchant$*.class",
+    "de/guntram/mcmod/easiervillagertrading/EasierVillagerTrading.class",
+    "de/guntram/mcmod/easiervillagertrading/EasierVillagerTrading$*.class",
+    "de/guntram/mcmod/easiervillagertrading/mixins/*.class",
+)
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    classDirectories.setFrom(classDirectories.files.map { fileTree(it) { exclude(jacocoExcludes) } })
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+    classDirectories.setFrom(classDirectories.files.map { fileTree(it) { exclude(jacocoExcludes) } })
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "1.00".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+// Forge's pack.mcmeta generation task writes into the main source set's resources output
+// without declaring that as a tracked task output, which Gradle's task validation flags as
+// an undeclared ("implicit") dependency on :compileTestJava (which consumes sourceSets.main.output
+// as part of the test compile classpath now that the "test" sourceSet/tasks exist on every
+// cell). Declare the dependency explicitly so validation passes. tasks.matching(...) is a
+// live/lazy filter, so this is a harmless no-op on loaders that don't have a
+// generatePackMCMetaJson task (e.g. Fabric). Same fix as critical-orientation's build.gradle.kts.
+tasks.matching { it.name == "compileTestJava" }.configureEach {
+    dependsOn(tasks.matching { it.name == "generatePackMCMetaJson" })
 }
