@@ -1,5 +1,50 @@
+# Gradle
 .gradle/
-.nb-gradle/
 build/
-gradle/
-gradlew
+out/
+classes/
+
+# Stonecutter-generated per-version subprojects (preprocessed copies of
+# src/, regenerated from it - never hand-edit, never commit). The
+# versions/dependencies/*.properties files are hand-maintained loader/mapping
+# version pins, NOT generated, and are tracked.
+versions/*
+!versions/dependencies
+.stonecutter-cache/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.settings/
+bin/
+.classpath
+.project
+
+# NetBeans
+.nb-gradle/
+
+# VS Code
+.vscode/
+
+# Fabric / Minecraft
+run/
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local environment
+.env
+.env.local
+*.local
+
+# Loom
+remappedSrc/
+*-refmap.json

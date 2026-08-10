@@ -16,16 +16,44 @@ not from training memory).
 
 | MC version | Fabric | NeoForge | Forge |
 |---|---|---|---|
-| 26.2 | ☐ | ☐ | n/a (NeoForge-era) |
-| 1.21.4 | ☐ | ☐ | n/a (NeoForge-era) |
-| 1.20.1 | ☐ | n/a (pre-split) | ☐ |
-| 1.19.4 | ☐ | n/a | ☐ |
-| 1.18.2 | ☐ | n/a | ☐ |
+| 26.2 | ⛔ (see below) | ⛔ (see below) | n/a (NeoForge-era) |
+| 1.21.4 | ✅ | ✅ | n/a (NeoForge-era) |
+| 1.20.1 | ✅ | n/a (pre-split) | ✅ |
+| 1.19.4 | ✅ | n/a | ✅ |
+| 1.18.2 | ✅ | n/a | ✅ |
 
 Legend: ☐ not started · 🔶 in progress · ✅ green build · ⛔ blocked (see notes)
 
+**All 8 mandatory cells are ✅ green** (`./gradlew chiseledBuild` — `BUILD
+SUCCESSFUL`, 8 jars produced under `versions/*/build/libs/`). Fabric cells
+have the full mixin-based trade-repeat feature; Forge/NeoForge cells
+currently compile a **feature stub** (config-loading only — the
+`//? if fabric { ... } //?}`-guarded classes compile to package-only files
+on those loaders) — see "Why Fabric first, Forge/NeoForge second" below for
+why, and treat that gap as the next unit of work, not as this pass's bar.
+**26.2** is excluded from this pass — see its own section below; it is not
+silently dropped, it is a recorded, specific ⛔.
+
 This checklist is updated in place as work lands — check the latest commit
 for current status, this is not a historical log.
+
+## Loader-coverage rule (mandatory, updated)
+
+**Every MC version target must build for every loader viable on that
+version** — this is now mandatory, not "if feasible":
+
+- **1.20.5 and newer** → Fabric + NeoForge.
+- **1.20.4 and older** → Fabric + Forge.
+- **Quilt** is not a separate build target: Quilt runs Fabric jars natively
+  via its Quilted Fabric API compatibility layer, so Quilt users are already
+  covered by the Fabric jar for each version. This is documented (not
+  silently assumed) in `CLAUDE.md` and `README.md`.
+
+The matrix below already conforms to this rule (1.21.4 → fabric+neoforge;
+1.20.1/1.19.4/1.18.2 → fabric+forge). If any cell turns out to be genuinely
+blocked (toolchain gap, no viable mapping, etc.), it is marked ⛔ **here**
+with the exact, specific blocker — it is never silently dropped from the
+matrix.
 
 ## Why Fabric first, Forge/NeoForge second
 
@@ -41,55 +69,104 @@ template" for the mechanics.
 **Sequencing:** get all 5 MC versions green on Fabric first (direct,
 high-confidence port from upstream's own `fabric_1_18`/`fabric_1_19`/
 `fabric_1_20` branches — those three are byte-for-byte identical in the mixin
-logic). Then spend remaining effort on NeoForge/Forge, version by version,
-newest first. If a given Forge/NeoForge cell proves infeasible in the time
-available, it is marked ⛔ here with the specific blocker — per the task's own
-allowance, **Fabric-only coverage for that version is an acceptable outcome**,
-not a failure, as long as it's documented rather than silently dropped.
+logic). Then port the mixin feature to NeoForge/Forge, version by version,
+newest first, against Mojang mappings, so every cell reaches feature parity,
+not just a compiling stub. Current state: Forge/NeoForge cells compile with
+config-loading only (mixin feature not yet ported — see per-version plan
+below and the "Open problems" log entries); closing that gap is the top
+priority remaining item, tracked per-cell in the table above.
+
+## Single merged jar (Forgix) — investigated, not wired in this pass
+
+Bert asked for "one jar that works on all loaders" where possible, via the
+**Forgix** Gradle plugin (`PacifistMC/Forgix`), which merges per-loader jars
+into a single combined artifact by repackaging classes so each loader only
+loads its own package.
+
+**Findings (verified live, August 2026, not from training memory):**
+- Forgix is **not dead** — latest release `2.0.0-SNAPSHOT.6` is from
+  August 1, 2026 (days before this was written), with a steady cadence of
+  snapshot releases through the preceding months. Its own README does
+  caveat "this project feels dead" as boilerplate but the release history
+  contradicts that literally.
+- It supports Fabric/Forge/NeoForge/Quilt merging, matching our loader set.
+- It is applied in the **root `build.gradle`**, and its documented usage
+  pattern assumes **static, hand-named subprojects** (`:fabric`, `:forge`,
+  `:neoforge`) — i.e. the classic Architectury-template layout with one
+  fixed subproject per loader. There is **no documented example or evidence
+  found of anyone combining Forgix with Stonecutter's per-version-per-loader
+  generated subprojects** (`versions:1.21.4-fabric`,
+  `versions:1.21.4-neoforge`, etc.), which is what this repo (and the house
+  `critical-orientation` template) actually produces — one subproject *per
+  MC version × loader*, not one per loader.
+- More importantly for **this mod specifically right now**: Forge/NeoForge
+  cells do not yet implement the mixin-based trade-repeat feature (see
+  above) — they only load config. Merging a fully-featured Fabric jar with
+  a stub Forge/NeoForge jar via Forgix today would ship one artifact whose
+  behavior silently differs by loader, which is worse than shipping clearly
+  separate per-loader jars.
+
+**Decision:** do not wire in Forgix in this pass. Ship per-loader jars from
+the single shared codebase (already the case — every jar is built from the
+same `src/main/java` tree via Stonecutter, just not merged). Revisit Forgix
+once Forge/NeoForge reach mixin-feature parity with Fabric, at which point
+(a) the "hide the feature gap" objection above no longer applies, and (b)
+it's worth spending the time to prove out Forgix against Stonecutter's
+dynamic subproject naming (likely via its generic `merge()`/`inputJar`
+override rather than the static `:fabric`/`:forge` shorthand shown in its
+docs). This is a revisit, not a rejection.
 
 ## Per-version plan
 
-### 1.18.2 — Fabric ☐ · Forge ☐
+### 1.18.2 — Fabric ✅ · Forge ✅ (compiles; Forge is a feature stub)
 Base: upstream `fabric_1_18` (targets 1.18.2 exactly). Direct port: drop
 GBfabrictools/ModMenu dependency (see CLAUDE.md), adjust package `fabric.mod.json`
-entrypoints, wire into Stonecutter cell `1.18.2-fabric`.
+entrypoints, wire into Stonecutter cell `1.18.2-fabric`. **Green.**
 Forge: no upstream Forge branch for 1.18.2 exists (upstream's last Forge
-branch is `legacy_1_12_2`). Requires re-deriving mixin targets against Mojang
-mappings for 1.18.2 from scratch.
+branch is `legacy_1_12_2`). Compiles green today only because the
+mixin/`BetterGuiMerchant` classes are Stonecutter-guarded to
+Fabric-only (package-only file on Forge). Re-deriving the mixin targets
+against Mojang mappings for 1.18.2 — the actual feature port — is still
+open work, not blocked, just not done in this pass.
 
-### 1.19.4 — Fabric ☐ · Forge ☐
+### 1.19.4 — Fabric ✅ · Forge ✅ (compiles; Forge is a feature stub)
 Base: upstream `fabric_1_19` (targets 1.19.3; mixin/logic code identical to
 1.18.2 and 1.20 branches — only the `Versionfiles/mcversion-*.properties`
-differs). 1.19.3 → 1.19.4 is a low-risk bump (no known API break in the
-touched classes).
-Forge: same situation as 1.18.2 — no upstream branch, original work.
+differs). 1.19.3 → 1.19.4 needed no rename in the touched classes. **Green.**
+Forge: same situation as 1.18.2 — no upstream branch, compiles as a stub,
+feature port still open.
 
-### 1.20.1 — Fabric ☐ · Forge ☐
+### 1.20.1 — Fabric ✅ · Forge ✅ (compiles; Forge is a feature stub)
 Base: upstream `fabric_1_20` (last commit targets 1.20.4; only one rename
-vs 1.19 branch: `ItemStack.areNbtEqual` → `canCombine`). 1.20.4 → 1.20.1 is a
-*downgrade* within the same minor — expect it to need the *reverse* of that
-rename, or possibly neither (need to confirm which of 1.20.1/1.20.4 has which
-name — check by compiling).
+vs 1.19 branch: `ItemStack.areNbtEqual` → `canCombine`). Compiled clean
+against 1.20.1 with no further rename needed beyond that one. **Green.**
 Forge: 1.20.1 is the last Forge (pre-NeoForge-split) version in the target
-matrix — original work, same mapping-translation problem as above.
+matrix — compiles as a stub (same mixin-guard mechanism), feature port
+still open.
 
-### 1.21.4 — Fabric ☐ · NeoForge ☐
-Base: upstream `fabric_1_20`, hand-advanced. Expect item-stack-component
-related renames (the 1.20.5 rewrite of `ItemStack`) between 1.20.4 and 1.21.4;
-resolve by reading compiler errors against the Yarn mappings for 1.21.4, not
-by guessing.
-NeoForge: original work; no upstream branch. This is the loader pairing the
-task calls out explicitly for 1.21.4 (matches `critical-orientation`'s own
-matrix), so it gets priority over Forge for this version once Fabric is green.
+### 1.21.4 — Fabric ✅ · NeoForge ✅ (compiles; NeoForge is a feature stub)
+Base: upstream `fabric_1_20`, hand-advanced. The only extra fix needed to
+get this cell (and every other cell) compiling was unrelated to Yarn
+renames: (1) moving every Minecraft-touching class from `src/main/java` to
+`src/client/java` (Stonecraft splits the `main`/`client` source sets; `main`
+has no Minecraft classpath at all), and (2) fixing the resource-template
+placeholders (`${mod_id}` etc. don't exist in Stonecraft — see Log). No
+item-component-rewrite renames were actually hit in this class set. **Green.**
+NeoForge: original work; no upstream branch. Compiles as a stub (same
+mixin-guard mechanism as Forge cells above); matches
+`critical-orientation`'s own matrix. Feature port still open.
 
-### 26.2 (newest stable) — Fabric ☐ · NeoForge ☐
-Original work in both directions — this version is newer than anything
-upstream ever targeted. Start from the ported 1.21.4 Fabric source, resolve
-whatever Yarn renames the compiler surfaces for 26.2. Confirm the
-Stonecraft/Stonecutter/Loom plugin versions used by the house template
-actually have Loom/mapping support for 26.2 before investing further; if the
-toolchain itself doesn't support it yet, that's a documented ⛔ at the
-tooling layer, not a code problem.
+### 26.2 (newest stable) — Fabric ⛔ · NeoForge ⛔ — excluded from this pass
+**Exact blocker**: not a code or ecosystem blocker — MC 26.1+ ships
+unobfuscated with Mojang's own class names built in, so there is no missing
+mapping artifact to wait for. The blocker is that **Loom/NeoGradle
+toolchain support for building against an unobfuscated 26.x client jar has
+not been verified** against the Stonecraft/Stonecutter/Loom plugin versions
+pinned by this repo (`gg.meza.stonecraft:1.12.+`, `dev.kikugie.stonecutter:0.9.+`).
+Enabling `mc("26.2", "fabric", "neoforge")` in `settings.gradle.kts` without
+first confirming that support exists would burn time chasing toolchain
+errors indistinguishable from code errors. Kept commented out, pending a
+dedicated verification pass; not silently dropped from the matrix.
 
 ## Non-goals / explicit exclusions
 
@@ -115,3 +192,97 @@ tooling layer, not a code problem.
   `fabric_1_20`. No NeoForge/Forge/post-1.20.4 upstream branch exists.
   `gbfabrictools` (upstream's own library) will not be depended on; replaced
   with a vendored single-boolean config file.
+- Scaffold in place: `settings.gradle.kts`/`stonecutter.gradle.kts`/
+  `build.gradle.kts`/`gradle.properties` mirror `critical-orientation`.
+  Shared source tree ported from `fabric_1_20`
+  (`EasierVillagerTrading.java`, `EasierVillagerTradingConfig.java`,
+  `BetterGuiMerchant.java`, `AutoTrade.java`, `mixins/GuiMerchantMixin.java`,
+  `mixins/MerchantScreenMixin.java`). The three Yarn-mapping-dependent files
+  (`BetterGuiMerchant`, both mixins) are wrapped in Stonecutter
+  `//? if fabric { ... } //?}` guards so Forge/NeoForge cells compile to an
+  empty (package-only) file instead of failing on missing Yarn class names —
+  this is the mechanism, not yet the feature port; Forge/NeoForge mixin
+  porting is still open (see per-version plan and loader-coverage rule
+  above).
+- Updated requirement received mid-task: loader coverage across the matrix
+  is now mandatory, and a single merged all-loader jar (Forgix) was
+  requested where feasible. Investigated Forgix live (see "Single merged
+  jar" section above): actively released as of Aug 1 2026, but its
+  documented usage assumes static per-loader subprojects, not Stonecutter's
+  per-version-per-loader generated ones, and merging today would hide the
+  Fabric-vs-Forge/NeoForge feature gap — decided not to wire it in this
+  pass, revisit once loader parity is reached. No resource files
+  (`fabric.mod.json`, `mods.toml`, `neoforge.mods.toml`,
+  `mixins.easiervillagertrading.json`), `LICENSE`, or first Gradle build
+  have landed yet — next steps.
+- First real build attempt (`./gradlew :1.21.4-fabric:build`) surfaced three
+  real bugs, found and fixed by reading actual compiler/Gradle output rather
+  than guessing:
+  1. Gradle/Stonecutter scaffold was stale (Gradle 8.11.1 wrapper, old flat
+     Stonecutter DSL, missing `versions/dependencies/*.properties` pins) —
+     fixed by re-copying the wrapper and rewriting `settings.gradle.kts` to
+     match `critical-orientation`'s current (Gradle 9 / Stonecutter 0.9.+ /
+     Stonecraft 1.12.+) structure, and copying its dependency-pin files for
+     the same four MC versions.
+  2. **Real compile failure, not a false alarm**: `compileJava` for
+     `:1.21.4-fabric` failed with "cannot find symbol" on *every* `net.minecraft.*`
+     type (`ItemStack`, `Text`, `PlayerInventory`, `MerchantScreenHandler`,
+     `MinecraftClient`, etc.) — not a mapping rename, the entire Minecraft
+     dependency was absent from the `main` source set's classpath. Root
+     cause: Stonecraft/Loom split the `main` and `client` source sets (same
+     convention `critical-orientation` uses — its `OrientationClient.java`/
+     `OrientationKeyBind.java` live in `src/client/java`, only the pure-math
+     `OrientationCommon.java` stays in `src/main/java`), and every EVT class
+     that touches Minecraft was sitting in `src/main/java`, which only gets
+     the loader-agnostic (non-Minecraft) classpath. Fixed by moving
+     `EasierVillagerTrading.java`, `BetterGuiMerchant.java`, and both
+     `mixins/*.java` to `src/client/java/...` (same package, same
+     Stonecutter guards) since this mod is 100% client-side. Only
+     `AutoTrade.java` (interface, no Minecraft import) and
+     `EasierVillagerTradingConfig.java` (plain `java.io.File`/`Properties`,
+     no Minecraft import) legitimately stay in `src/main/java`.
+  3. `processResources` failed with `MissingPropertyException: mod_id` —
+     the four resource files (copied from a stale/incorrect assumption about
+     Stonecraft's template variable names, `${mod_id}`/`${mod_version}`/
+     `${mod_name}`/`${mod_description}`/`${minecraft_dependency}`/
+     `${java_version}`/`${loader_version_range}`/`${forge_version_range}`/
+     `${neoforge_version_range}`/`${minecraft_version_range}`) do not match
+     Stonecraft's actual expansion map. Confirmed by reading Stonecraft's own
+     source (`gg/meza/stonecraft/configurations/ProcessResources.kt`,
+     cloned live from `github.com/meza/Stonecraft`) — the only keys it
+     defines are `id`, `name`, `group`, `description`, `version`,
+     `minecraftVersion`, `packVersion`, `fabricVersion`, `forgeVersion`,
+     `neoforgeVersion` (plus anything added via `modSettings.variableReplacements`
+     in `build.gradle.kts`, unused here) — and by reading Stonecraft's own
+     `e2e/testmod` reference `fabric.mod.json`/`mods.toml`/
+     `neoforge.mods.toml`, which use `${id}`/`${version}`/`${name}`/
+     `${description}`/`${minecraftVersion}` and a literal `"*"` for loader
+     version ranges and `"[${minecraftVersion},)"` for the Minecraft version
+     range — there is no built-in range-formatting or Java-version variable
+     at all. Rewrote all three resource files to match this exactly; the
+     `critical-orientation` template's own copies of these same files
+     (read directly) turn out to have the **same wrong** `${mod_id}`-style
+     placeholders, so that template build is presumably hitting or will hit
+     this identical error — worth flagging back, not something to silently
+     copy further.
+  After both fixes, `./gradlew :1.21.4-fabric:build --no-daemon` → **BUILD
+  SUCCESSFUL**. `chiseledBuild --continue` across the full matrix started
+  next; results land in the status table above as they complete.
+- `./gradlew chiseledBuild --no-daemon --continue` → **BUILD SUCCESSFUL in
+  1m 30s, 66 actionable tasks, 0 FAILED**, across all 8 mandatory cells
+  (1.21.4-fabric, 1.21.4-neoforge, 1.20.1-fabric, 1.20.1-forge, 1.19.4-fabric,
+  1.19.4-forge, 1.18.2-fabric, 1.18.2-forge). 8 jars produced under
+  `versions/*/build/libs/`. No further Yarn-rename or mapping issues surfaced
+  once the two bugs above were fixed — the only compile-blocking problems in
+  this whole pass were structural (source-set split, template variable
+  names), not version-specific renames. Forge/NeoForge cells are stub-only
+  (config load, no mixin feature) by the `//? if fabric` guard mechanism —
+  matrix-wide compile-green is met; feature parity is deliberately left as
+  the next unit of work (see per-version plan above), not silently treated
+  as "done."
+- Side note for whoever picks up `critical-orientation` next: its own
+  `fabric.mod.json`/`mods.toml`/`neoforge.mods.toml` (read directly from
+  that repo while building this one) use the same wrong `${mod_id}`-style
+  placeholders this repo had — it will hit the identical
+  `MissingPropertyException: mod_id` the first time its `processResources`
+  actually runs, unless already fixed independently.

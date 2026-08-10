@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "${id}",
+  "version": "${version}",
+
+  "name": "${name}",
+  "description": "${description}",
+  "authors": [
+    "Guntram Blohm",
+    "Bert Shuler"
+  ],
+  "contact": {
+    "homepage": "https://github.com/bshuler/EasierVillagerTrading",
+    "sources": "https://github.com/bshuler/EasierVillagerTrading",
+    "issues": "https://github.com/bshuler/EasierVillagerTrading/issues"
+  },
+
+  "license": "MIT",
+  "icon": "icon.png",
+
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "de.guntram.mcmod.easiervillagertrading.EasierVillagerTrading"
+    ]
+  },
+
+  "mixins": [
+    "mixins.easiervillagertrading.json"
+  ],
+
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "minecraft": ">=${minecraftVersion}",
+    "java": ">=17"
+  }
+}

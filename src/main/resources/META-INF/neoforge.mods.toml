@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "*"
+license = "MIT"
+issueTrackerURL = "https://github.com/bshuler/EasierVillagerTrading/issues"
+
+[[mods]]
+modId = "${id}"
+version = "${version}"
+displayName = "${name}"
+description = '''${description}'''
+authors = "Guntram Blohm, Bert Shuler"
+displayURL = "https://github.com/bshuler/EasierVillagerTrading"
+
+[[dependencies.${id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "*"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.${id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "[${minecraftVersion},)"
+ordering = "NONE"
+side = "CLIENT"

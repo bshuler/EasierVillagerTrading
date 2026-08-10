@@ -1,0 +1,12 @@
+{
+    "required": true,
+    "package": "de.guntram.mcmod.easiervillagertrading.mixins",
+    "minVersion": "0.8",
+    "client": [
+        "GuiMerchantMixin",
+        "MerchantScreenMixin"
+    ],
+    "injectors": {
+        "defaultRequire": 1
+    }
+}

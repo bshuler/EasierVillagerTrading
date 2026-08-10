@@ -82,10 +82,11 @@ EasierVillagerTrading/
 ├── gradle.properties          # mod.id / mod.version / mod.group
 ├── src/
 │   ├── main/java/de/guntram/mcmod/easiervillagertrading/
+│   │   ├── EasierVillagerTradingConfig.java  # vendored config (replaces GBfabrictools) — no MC import
+│   │   └── AutoTrade.java                    # interface implemented by BetterGuiMerchant — no MC import
+│   ├── client/java/de/guntram/mcmod/easiervillagertrading/
 │   │   ├── EasierVillagerTrading.java        # loader entry point (Stonecutter-conditioned)
-│   │   ├── EasierVillagerTradingConfig.java  # vendored config (replaces GBfabrictools)
 │   │   ├── BetterGuiMerchant.java            # core repeat-trade logic — loader/version stable
-│   │   ├── AutoTrade.java                    # interface implemented by BetterGuiMerchant
 │   │   └── mixins/
 │   │       ├── GuiMerchantMixin.java         # swaps in BetterGuiMerchant for vanilla MerchantScreen
 │   │       └── MerchantScreenMixin.java      # hooks trade-selection to fire AutoTrade.trade()
@@ -128,6 +129,26 @@ knowledge). At the time this was written, newest stable = **26.2**.
 | 1.19.4 | target | — | target |
 | 1.18.2 | target | — | target |
 
+**Loader coverage is mandatory, not "if feasible"**: every version target
+must build for every loader viable on that version — Fabric + NeoForge for
+1.20.5 and newer, Fabric + Forge for 1.20.4 and older. A cell may only be
+marked blocked (⛔) with an exact, specific reason recorded in `PLAN.md`; it
+is never silently dropped from the matrix.
+
+**Quilt**: not a separate build target. Quilt runs Fabric jars natively via
+its Quilted Fabric API compatibility layer, so every Fabric jar this repo
+produces is already Quilt-compatible — there is nothing extra to build or
+port for Quilt specifically.
+
+**Single merged jar (Forgix)**: investigated per Bert's request and not
+wired in this pass — see `PLAN.md` § "Single merged jar (Forgix)" for the
+live-verified findings (plugin is actively released, but its documented
+usage assumes static per-loader subprojects rather than Stonecutter's
+per-version-per-loader ones, and merging before Forge/NeoForge reach mixin
+feature parity with Fabric would hide a real behavior gap behind one
+artifact). Ship per-loader jars from the single shared codebase for now;
+revisit once parity is reached.
+
 Live status/checklist: `PLAN.md`.
 
 ## Build commands
@@ -152,6 +173,27 @@ JDK, never touch Homebrew for this.
 
 ## Porting notes for whoever (human or AI) continues this
 
+- **`src/main/java` vs `src/client/java` is not cosmetic.** Stonecraft/Loom
+  splits the `main` and `client` source sets: `main`'s compile classpath has
+  *no* Minecraft dependency at all, only `client`'s does. Any class that
+  imports so much as `net.minecraft.item.ItemStack` must live under
+  `src/client/java/...` (same package) or `compileJava` fails with "cannot
+  find symbol" on every `net.minecraft.*` type, which looks like a
+  mapping/rename problem but isn't. This mod is 100% client-side, so almost
+  everything is under `src/client/java`; only genuinely Minecraft-free
+  classes (`AutoTrade`, `EasierVillagerTradingConfig`) stay in
+  `src/main/java`. When adding a new file, ask "does this import anything
+  from `net.minecraft`?" — if yes, it goes in `client`.
+- **Stonecraft resource-template variables are exactly**: `${id}`,
+  `${name}`, `${group}`, `${description}`, `${version}`, `${minecraftVersion}`,
+  `${packVersion}`, `${fabricVersion}`, `${forgeVersion}`, `${neoforgeVersion}`
+  — confirmed by reading Stonecraft's own source
+  (`gg/meza/stonecraft/configurations/ProcessResources.kt`) and its
+  `e2e/testmod` reference resource files, not guessed. There is no
+  pre-built version-range or Java-version variable; write ranges literally
+  (e.g. `"[${minecraftVersion},)"`, `loaderVersion = "*"`). Any other name
+  (e.g. `${mod_id}`, `${minecraft_dependency}`) fails `processResources`
+  with `MissingPropertyException`.
 - **Start from upstream, not from local `main`.** If gbl ever publishes a
   1.21.x or NeoForge/Forge branch, diff it in before hand-porting further.
 - The `BetterGuiMerchant` trade-repeat algorithm (slot-click simulation) has
