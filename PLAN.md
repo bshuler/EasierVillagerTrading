@@ -26,15 +26,13 @@ Legend: ☐ not started · 🔶 in progress · ✅ green build · ⛔ blocked (s
 
 **All 10 cells are ✅ green with full feature parity** (`./gradlew
 chiseledBuild` — `BUILD SUCCESSFUL`, 10 jars produced under
-`versions/*/build/libs/`) **for compiling/building the mod jar itself.**
-Since Phase 2 wired real JUnit tests into every cell's `test` task,
-`chiseledBuild`'s full task graph (`build` → `check` → `test`) now surfaces
-one pre-existing, upstream, NeoForge-only test-execution bug on
-`1.21.4-neoforge` unrelated to this mod's code — see PLAN.md "Known
-limitation: `chiseledBuild` and `:1.21.4-neoforge:test`" under "Test
-coverage (Phase 2)" below for the full detail; `assemble`/`jar` for that
-cell are still green, and 9/10 cells are fully green including tests and
-coverage. Every cell, on every loader, ships the real
+`versions/*/build/libs/`) **including tests and coverage on
+every cell.** Since Phase 2 wired real JUnit tests into every cell's `test`
+task, `chiseledBuild`'s full task graph (`build` → `check` → `test`)
+initially surfaced a pre-existing upstream NeoForge-only test-execution bug
+on `1.21.4-neoforge`, since fixed via a `junit-fml` test-classpath exclusion
+— see "RESOLVED: `chiseledBuild` and `:1.21.4-neoforge:test`" under "Test
+coverage (Phase 2)" below. Every cell, on every loader, ships the real
 mixin-based trade-repeat feature (`BetterGuiMerchant`, `GuiMerchantMixin`,
 `MerchantScreenMixin`) — not a config-only stub. Verified per-cell via
 `unzip -l` on the actual built jar (not just "BUILD SUCCESSFUL") — each jar
@@ -314,41 +312,29 @@ Run tests + coverage for the active cell:
 
 HTML report: `versions/1.21.4-fabric/build/reports/jacoco/test/html/index.html`.
 
-### Known limitation: `chiseledBuild` and `:1.21.4-neoforge:test`
+### RESOLVED: `chiseledBuild` and `:1.21.4-neoforge:test` (`junit-fml` / `mainargs.txt`)
 
 Wiring real JUnit tests into `build.gradle.kts` means every cell's `test`
 task now actually spins up a Gradle Test Executor (before this pass, `test`
 was `NO_SOURCE` on every cell and never ran a JVM for it, so this was
-latent/invisible). `./gradlew chiseledBuild` builds `build` (→ `check` → the
-new `jacocoTestCoverageVerification` → `test`) on all 10 cells; 9 of them go
-fully green end-to-end. **`:1.21.4-neoforge:test` fails** with
-`java.nio.file.NoSuchFileException: mainargs.txt` — this is the exact same
-**pre-existing upstream NeoForge/FML bug already documented in
-`critical-orientation`'s `build.gradle.kts`**: NeoForge's transitive
+latent/invisible). `:1.21.4-neoforge:test` initially failed with
+`java.nio.file.NoSuchFileException: mainargs.txt` — a pre-existing upstream
+NeoForge/FML bug: NeoForge's transitive
 `net.neoforged.fancymodloader:junit-fml` artifact for MC 1.21.4-era releases
 looks up a run-config file (`mainargs.txt`) via a relative path that doesn't
-resolve under Gradle's test-worker working directory, and the fix (junit-fml
-10.0+) requires a newer FML core API surface that isn't present in this
-version's NeoForge release — not something fixable from this repo's build
-script in isolation. Confirmed **not** a regression introduced by this pass:
-`critical-orientation`'s own `chiseledBuild` fails identically today, for
-the same reason, on its 1.21.4-neoforge cell.
+resolve under Gradle's test-worker working directory. Forcing the
+upstream-fixed junit-fml 10.0+ isn't viable either (it needs a newer FML
+core API surface than this NeoForge release ships).
 
-- `:1.21.4-neoforge:compileJava`/`compileClientJava`/`jar`/`remapJar`/
-  `assemble` are all green — the shipped mod jar for this cell is unaffected
-  (verified via `./gradlew ":1.21.4-neoforge:assemble"` in isolation —
-  `BUILD SUCCESSFUL`).
-- `:1.21.4-neoforge:jacocoTestReport`/`jacocoTestCoverageVerification`/
-  `check`/`build` never execute for this one cell as a direct consequence
-  (they depend on `test`'s output) — not a coverage gap in the tested logic
-  itself, since the tested class (`EasierVillagerTradingConfig`) has no
-  loader-specific code path at all.
-- `26.2-neoforge` (the only other NeoForge cell in this matrix) is
-  unaffected and fully green — its newer NeoForge/FML release doesn't carry
-  the buggy `junit-fml`.
-- All 4 Forge cells (1.18.2/1.19.4/1.20.1-forge) and all 5 Fabric cells
-  (1.18.2/1.19.4/1.20.1/1.21.4/26.2-fabric) plus `26.2-neoforge`: fully green
-  through `build` (9/10 cells).
+**The fix** (proven across the sibling repos — simple-utilities-mod,
+ToroHealth, critical-orientation): `junit-fml` exists to bootstrap FML for
+*gametests*, and this repo's tests are plain pure-logic JUnit tests that
+need none of that, so its auto-registered `LauncherSessionListener` (the
+code performing the failing lookup) is excluded from `testRuntimeClasspath`
+on NeoForge cells in `build.gradle.kts`. With the exclusion in place,
+`./gradlew chiseledBuild` runs `test`/`check` fully green on all 10 cells.
+(`26.2-neoforge`'s newer FML never carried the buggy `junit-fml` and was
+green throughout.)
 
 ## Folia
 

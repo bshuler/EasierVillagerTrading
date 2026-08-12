@@ -100,6 +100,19 @@ tasks.test {
     finalizedBy(tasks.jacocoTestReport)
 }
 
+// NeoForge's transitive net.neoforged.fancymodloader:junit-fml (<=9.0.18, pulled in by the
+// 1.21.4 target) auto-registers a LauncherSessionListener that looks up a run-config file
+// "mainargs.txt" via a relative path that doesn't resolve under Gradle's test-worker working
+// directory, failing `test` at JUnit-launcher startup with NoSuchFileException: mainargs.txt.
+// junit-fml exists to bootstrap FML for *gametests*; this repo's tests are plain pure-logic
+// JUnit tests that need none of that, so it's excluded from the test runtime classpath.
+// Same fix as the sibling critical-orientation / simple-utilities-mod / ToroHealth repos.
+if (mod.isNeoforge) {
+    configurations.named("testRuntimeClasspath") {
+        exclude(group = "net.neoforged.fancymodloader", module = "junit-fml")
+    }
+}
+
 // JaCoCo scope: this mod is almost entirely mixin/GUI/loader-entry-point code, all of which
 // touches real Minecraft client classes (MerchantScreen, MerchantMenu, FabricLoader, Mixin
 // injection targets) at class-load or call time and is genuinely untestable headless - see
