@@ -577,3 +577,91 @@ Read from the JaCoCo XML report, not from whether the gate passes:
 
 A passing `check` means "no regression inside the analysed surface" — it does not
 mean the whole codebase is tested to that percentage.
+
+## Tier 1: loaded-game testing (added 2026-08-13)
+
+The coverage numbers above measure *headless* tests against pure logic — and in
+this repo that is one class, the vendored config. Nothing verified that the
+part of the mod people actually install (the repeat-trade loop) still rests on
+vanilla behaving the way it did when the loop was written.
+
+`net.fabricmc:fabric-loader-junit` closes as much of that gap as is reachable
+without a client. It stands a real Fabric loader up inside the JUnit worker, so
+`src/test/java/.../LoadedGameTest.java` can call
+`SharedConstants.tryDetectVersion()` + `Bootstrap.bootStrap()` and then assert
+against genuinely loaded game data. Eight tests, on every Fabric cell:
+
+1. `gameDataIsActuallyLoaded` — a guard on the harness itself. If the bootstrap
+   ever silently no-ops, everything below becomes vacuous, so this pins
+   `Items.EMERALD`'s registry key and a >500-entry item registry.
+   (`Registry.ITEM` → `BuiltInRegistries.ITEM` at 1.19.3, hence one
+   `//? if >=1.19.3` guard.)
+2. `modIsDiscoveredByARealFabricLoader` — the *processed* `fabric.mod.json`
+   (Stonecraft templating already applied) is on the test classpath, so a real
+   loader discovers the mod exactly as the game would. Mis-templated metadata
+   fails here instead of at first launch.
+3. `declaredDependencyRangesAreSatisfiableInThisCell` — the one with teeth. In a
+   Stonecutter matrix a cell can compile and package flawlessly while declaring
+   a `minecraft` range that excludes the very version it was built for; the jar
+   then fails at load time, in front of a user, with nothing in CI having gone
+   red. The loader now resolves every `DEPENDS` range against the
+   actually-loaded versions, per cell.
+4. `repeatTradeLoopTerminatesOnARealOffersStock` — `BetterGuiMerchant.trade()`
+   repeats `while (!recipe.isOutOfStock() && …)`, and nothing in the mod
+   decrements anything: it relies entirely on the game locking a real
+   `MerchantOffer` after `maxUses` trades. This builds a real offer, drives it
+   the way the loop does, and asserts it locks after exactly `maxUses` — well
+   inside the 50-click safeguard — then unlocks again on `resetUses()`. If that
+   invariant ever broke, the mod would quietly spam 50 slot-clicks at the server
+   on every trade rather than fail visibly.
+5. `offerCostsAndResultAreRealStacksTheInventoryScanCanMatch` — `getCostA()`/
+   `getCostB()`/`getResult()` are what paper over the 1.20.5 change from an
+   `ItemStack` cost to an `ItemCost` record; the inventory scan reads all three.
+   Includes the empty-`getCostB()` case, which the scan must tolerate rather
+   than read as "no emeralds found".
+6. `stackMergeCheckAgreesWithRealItemStacks` — the merge check is the only
+   genuinely version-conditional logic this fork has
+   (`isSameItemSameTags` → `isSameItemSameComponents` at 1.20.5). Both names have
+   to keep meaning the same thing or the scan silently stops finding the
+   player's emeralds. Real stacks, real vanilla comparison, including the
+   damaged-vs-undamaged tool case.
+7. `outputCapacityMathUsesRealStackLimits` — `canReceiveOutput()` decides whether
+   a result fits using `getMaxStackSize()`. Those limits are game data, so they
+   are read off real items (emerald 64, diamond pickaxe 1) rather than copied
+   into the test.
+8. `configRoundTripsThroughTheRealLoaderConfigDir` — `onInitializeClient()` does
+   exactly one thing: load the config from
+   `FabricLoader.getInstance().getConfigDir()`. That call is excluded from
+   coverage because it needs a loader; here there is one, so the entry point's
+   real behaviour gets exercised against the directory the loader hands out. The
+   test restores/removes the file it touches.
+
+**Verified, not assumed:** `./gradlew test` runs it in all 5 Fabric cells
+(1.18.2, 1.19.4, 1.20.1, 1.21.4, 26.2) with 8 tests each, 0 failures, 0 errors,
+read from `versions/*/build/test-results/test/TEST-*LoadedGameTest.xml` rather
+than from the build task's exit status. Bootstrap costs ~20-31s per cell.
+
+### The duplicated merge check
+
+`areItemStacksMergable` is copied into the test byte-for-byte, version split and
+all, rather than called. `BetterGuiMerchant` lives in the `client` source set,
+which Loom's `splitEnvironmentSourceSets()` layout keeps off the test compile
+classpath — the test source set sees common Minecraft (verified by compiling a
+throwaway probe against `net.minecraft.world.item.Items`) but not client-only
+mod code. The vanilla behaviour the check depends on is what is under test, so
+the copy earns its keep; if that split ever needs another branch, both copies
+need it.
+
+### What Tier 1 does *not* cover
+
+A loaded *game*, not a loaded *client*: there is no window, no render pass, no
+`MerchantScreen`, no `MerchantMenu` with slots in it. The mixins and
+`BetterGuiMerchant` itself remain untested and excluded, exactly as the coverage
+table above says. What changed is that the vanilla contracts they are built on
+are now pinned per cell. Driving the actual screen needs Tier 3 (Fabric client
+gametest + xvfb), still open.
+
+**NeoForge and Forge cells have no equivalent** — not an oversight. NeoForge's
+loaded-test path is ModDevGradle-only and this repo builds on Architectury Loom;
+Forge has nothing comparable at all. See the junit-fml comment in
+`build.gradle.kts`.

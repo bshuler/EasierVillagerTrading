@@ -93,6 +93,15 @@ dependencies {
     // Testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // Tier 1 "loaded game" testing (Fabric cells only). fabric-loader-junit stands a real
+    // Fabric loader up inside the JUnit worker, which is what makes it legal to call
+    // SharedConstants.tryDetectVersion() + Bootstrap.bootStrap() and then assert against
+    // genuinely loaded game data - see src/test/java/.../LoadedGameTest.java and PLAN.md.
+    // NeoForge/Forge have no Loom-compatible equivalent (see the junit-fml note below).
+    if (mod.isFabric) {
+        testImplementation("net.fabricmc:fabric-loader-junit:0.19.3")
+    }
 }
 
 tasks.test {

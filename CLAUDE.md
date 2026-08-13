@@ -181,12 +181,56 @@ line and branch coverage, enforced by `jacocoTestCoverageVerification`
 (which `check` depends on). See `PLAN.md` § "Test coverage (Phase 2)" for
 the full per-class exclusion table and reasoning.
 
-Tests run against the **active Stonecutter project only**
-(`1.21.4-fabric`, matching this repo's `vcsVersion`) — never run tests
-across the full matrix; the tested logic has no version-conditional
-branches to begin with. Switch cells only via
-`./gradlew "Set active project to <cell>"`, never by hand-editing
+`EasierVillagerTradingConfigTest` has no version-conditional branches, so for
+coverage purposes it is enough to run it against the **active Stonecutter
+project** (`1.21.4-fabric`, matching this repo's `vcsVersion`). The Tier 1
+loaded tests below are the opposite case and *are* run across the whole matrix
+— a bare `./gradlew test` runs every cell, which is deliberate. Switch cells
+only via `./gradlew "Set active project to <cell>"`, never by hand-editing
 `stonecutter.gradle.kts`.
+
+### Loaded-game tests (Tier 1)
+
+`src/test/java/.../LoadedGameTest.java` is different in kind from the rest of
+the suite: it runs against a **real, bootstrapped Minecraft**, not mocks.
+`net.fabricmc:fabric-loader-junit` stands a Fabric loader up inside the JUnit
+worker, which makes it legal to call `SharedConstants.tryDetectVersion()` +
+`Bootstrap.bootStrap()` in `@BeforeAll` and then assert against genuinely
+loaded game data.
+
+That matters more here than in the sibling repos, because the config class is
+the *only* thing this mod can test headless — and it is not the feature. The
+repeat-trade loop can't be driven without a client, but every vanilla contract
+it stands on can be: `MerchantOffer.isOutOfStock()` locking after `maxUses`
+(the loop's sole termination condition), the `getCostA()/getCostB()/getResult()`
+accessors that paper over the 1.20.5 `ItemStack` → `ItemCost` change, the
+stack-merge equivalence whose vanilla call was renamed at 1.20.5, real
+`getMaxStackSize()` limits, and the loader-supplied config dir the entry point
+writes to. Plus the two matrix-wide checks: a real loader discovers this mod
+from its processed `fabric.mod.json`, and every declared `depends` range is
+satisfiable in that specific cell (the "builds fine, refuses to load in-game"
+failure mode).
+
+- Fabric cells only (`//? if fabric` guards the whole file). NeoForge's
+  equivalent bootstrap is `junit-fml`, and its supported loaded-test harness is
+  ModDevGradle-only — unavailable under Architectury Loom. See the exclusion
+  comment in `build.gradle.kts`.
+- Verified green on **all 5 Fabric cells**, 8 tests each, read from
+  `versions/*/build/test-results/test/TEST-*LoadedGameTest.xml`. Bootstrap costs
+  ~20–31s per cell.
+- Unlike the rest of the suite, this file **must compile on every cell**, since
+  `./gradlew test` runs the whole matrix. Two version splits live in it: the
+  `Registry.ITEM` → `BuiltInRegistries.ITEM` move at 1.19.3, and the 1.20.5
+  `MerchantOffer(ItemStack…)` → `MerchantOffer(ItemCost…)` constructor change.
+  26.x also needs an extra bootstrap step (data components are bound from
+  loaded registry data rather than baked into the `Item`) — see `PLAN.md`.
+- `areItemStacksMergable` is **duplicated** from `BetterGuiMerchant` rather than
+  called: that class is in the `client` source set, which the split-environment
+  layout keeps off the test compile classpath. Change one, change both.
+
+```bash
+./gradlew ":1.21.4-fabric:test" --tests "*LoadedGameTest"
+```
 
 **Folia**: n/a — this is a 100% client-side mod with no server component.
 
