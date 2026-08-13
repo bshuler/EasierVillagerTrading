@@ -336,6 +336,20 @@ on NeoForge cells in `build.gradle.kts`. With the exclusion in place,
 (`26.2-neoforge`'s newer FML never carried the buggy `junit-fml` and was
 green throughout.)
 
+**What this exclusion costs (recorded 2026-08-13).** `junit-fml` is precisely
+NeoForge's own *loaded-test bootstrap* — it is what stands FML up so a test can
+run against a real, loaded game. Excluding it is the right call here, but it is
+a Loom-specific workaround, not a universal fix. NeoForge's supported
+loaded-test path (`neoForge { unitTest { enable(); testedMod = ... } }`, the
+`net.neoforged:testframework` artifact,
+`@ExtendWith(EphemeralTestServerProvider.class)` injecting a live
+`MinecraftServer`, and `gradlew runGameTestServer`) is **ModDevGradle-only**,
+and this repo builds on Architectury Loom via Stonecraft, so that path is
+unavailable here regardless. The exclusion therefore costs nothing today — but
+if a cell is ever migrated to ModDevGradle, revisit it before writing any
+loaded NeoForge test, because it would silently disable the very bootstrap
+such a test depends on.
+
 ## Folia
 
 Folia n/a — client mod. This is a 100% client-side Fabric/Forge/NeoForge
@@ -550,3 +564,16 @@ compatibility pass in the phase-2 brief does not apply here.
   the build-script change — **BUILD SUCCESSFUL**, no regressions. Active
   Stonecutter project left at `1.21.4-fabric`, matching `vcsVersion`
   (unchanged throughout this pass — never needed to switch cells).
+
+## Coverage in context (measured 2026-08-13)
+
+Read from the JaCoCo XML report, not from whether the gate passes:
+
+- **Analysed surface:** 2 of 2 compiled classes (100%).
+- **Line coverage of that surface:** 100.0% (30 lines analysed).
+- Classes outside that surface are excluded by the documented exclusion list. They
+  are not covered by any test and are not runtime-verified.
+  Measured from `EasierVillagerTrading/versions/1.18.2-fabric/build/reports/jacoco/test/jacocoTestReport.xml`.
+
+A passing `check` means "no regression inside the analysed surface" — it does not
+mean the whole codebase is tested to that percentage.
