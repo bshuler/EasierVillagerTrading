@@ -18,6 +18,7 @@ single codebase (via [Stonecutter](https://stonecutter.kikugie.dev/) /
 
 | Minecraft | Fabric | NeoForge | Forge |
 |---|---|---|---|
+| 26.2 | yes | yes | — |
 | 1.21.4 | yes | yes | — |
 | 1.20.1 | yes | — | yes |
 | 1.19.4 | yes | — | yes |
@@ -32,6 +33,29 @@ for the technical detail on why Forge/NeoForge support lags Fabric (the
 mod's core feature relies on mixins into vanilla internals, which are named
 differently under Fabric's Yarn mappings vs. Forge/NeoForge's Mojang
 mappings).
+
+## Testing
+
+Three tiers, all run by CI (`.github/workflows/build.yml`):
+
+1. **Unit tests + coverage** — JUnit 5 over the config class (the mod's only
+   Minecraft-free code), 100% line/branch coverage enforced by JaCoCo.
+2. **Loaded-game tests** (`fabric-loader-junit`) — a real bootstrapped
+   Minecraft verifies every vanilla contract the repeat-trade loop stands
+   on: `MerchantOffer.isOutOfStock()` locking after `maxUses` (the loop's
+   sole termination condition), the cost/result accessors across the 1.20.5
+   `ItemStack`→`ItemCost` change, real stack-size limits, and that a real
+   Fabric loader discovers the mod and can satisfy its dependency ranges.
+   Runs on every Fabric cell.
+3. **Client gametests** (`fabric-client-gametest-api-v1`, 1.21.4 + 26.2) —
+   a **real Minecraft client** walks up to a real wandering trader, opens
+   the real trade screen, and executes a real trade through the mod's code
+   path. This is the only tier that touches the mixins at all — a mixin
+   that fails to apply is a runtime event, not a compile error, so nothing
+   else can catch it. CI runs it headless under xvfb.
+
+Details, negative controls, and the per-class exclusion table are in
+`PLAN.md`.
 
 To make sure the mod doesn't slow down your minecraft, 
 it has been optimized using
