@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "easiervillagertrading-gametest",
+  "version": "1.0.0",
+  "name": "EasierVillagerTrading Client Game Test",
+  "description": "Tier 3 client gametest for EasierVillagerTrading. Never shipped: this source set is not part of any published jar.",
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "de.guntram.mcmod.easiervillagertrading.gametest.EasierVillagerTradingClientGameTest"
+    ]
+  },
+  "depends": {
+    "easiervillagertrading": "*"
+  }
+}

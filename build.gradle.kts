@@ -79,6 +79,90 @@ if (mod.isForgeLike) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Tier 3: client gametests (a real Minecraft client, real GL context, real world)
+// ---------------------------------------------------------------------------
+//
+// This is the only tier that can answer this mod's central question: do the two
+// mixins actually APPLY and FUNCTION in a running client? Mixin apply failures
+// are a runtime-only phenomenon - `mixins.easiervillagertrading.json` declares
+// "required": true with "injectors": {"defaultRequire": 1}, so a target rename
+// or a moved injection point kills the client at class-load time while the
+// build stays green and every other tier passes. Tier 1 (fabric-loader-junit)
+// bootstraps the game but never applies client mixins or opens a screen.
+//
+// fabric-client-gametest-api-v1 first ships around fabric-api 0.106 / MC 1.21.2,
+// so only the 1.21.4 and 26.2 Fabric cells can run this. Forge and NeoForge have
+// no equivalent reachable from Architectury Loom (see the junit-fml note below
+// for the same underlying ModDevGradle-only limitation).
+val clientGameTestSupported = mod.isFabric &&
+    stonecutter.eval(stonecutter.current.version, ">=1.21.4")
+
+if (clientGameTestSupported) {
+    extensions.configure<net.fabricmc.loom.api.fabricapi.FabricApiExtension>("fabricApi") {
+        configureTests {
+            createSourceSet.set(true)
+            modId.set("easiervillagertrading-gametest")
+            enableGameTests.set(false)
+            enableClientGameTests.set(true)
+        }
+    }
+
+    // Registering the gametest mod makes Loom stop inferring the mod under test,
+    // so it has to be declared explicitly. Unlike the sibling repos this one needs
+    // BOTH source sets: splitEnvironmentSourceSets() puts every class the test
+    // actually exercises (BetterGuiMerchant and both mixins) in "client", while
+    // AutoTrade and EasierVillagerTradingConfig stay in "main". Registering only
+    // "main" produces a dev-run mod with no mixin config and no entry point - the
+    // client boots, the test opens a vanilla MerchantScreen, and the flagship
+    // assertion fails for a reason that has nothing to do with the mod.
+    extensions.configure<net.fabricmc.loom.api.LoomGradleExtensionAPI>("loom") {
+        mods.create(mod.prop("id", "easiervillagertrading")) {
+            sourceSet(sourceSets["main"])
+            sourceSet(sourceSets["client"])
+        }
+    }
+
+    // The generated "gametest" source set is wired against "main" only, and on a
+    // split-environment Fabric cell "main" has no client-side Minecraft on its
+    // compile classpath at all - not MerchantScreen, not Minecraft, not Screen.
+    // The test also needs to name BetterGuiMerchant directly (it is the flagship
+    // assertion: waitForScreen(BetterGuiMerchant.class)). Hand the gametest source
+    // set the client source set's full classpath plus its output.
+    val clientSourceSet = sourceSets["client"]
+    sourceSets.named("gametest") {
+        compileClasspath += clientSourceSet.compileClasspath + clientSourceSet.output
+        runtimeClasspath += clientSourceSet.runtimeClasspath + clientSourceSet.output
+    }
+
+    // Two collisions with Stonecraft's own `runs.all {}` block, both of which
+    // apply to the clientGameTest run config Loom generates and neither of which
+    // Stonecraft knows about. afterEvaluate because Stonecraft configures these
+    // in its own plugin-apply phase; we have to be last.
+    afterEvaluate {
+        extensions.configure<net.fabricmc.loom.api.LoomGradleExtensionAPI>("loom") {
+            runs.named("clientGameTest") {
+                // Stonecraft appends --username=developer; Loom's clientGameTest
+                // config already supplies its own. joptsimple rejects the duplicate
+                // outright (MultipleArgumentsForOptionException) and the client dies
+                // before the first frame.
+                programArguments.set(
+                    programArguments.get().filterNot { it.startsWith("--username=") }
+                )
+                // Stonecraft's setRunDir points every run at the repo-root ../../run.
+                // Loom's own deleteGameTestRunDir task wipes whatever runDirectory
+                // resolves to, which would delete the shared dev-client run directory.
+                runDirectory.set(layout.buildDirectory.dir("run/clientGameTest"))
+            }
+        }
+    }
+
+    // `check` cannot run the client gametest itself (it needs a display; CI runs it
+    // under xvfb as a separate job), but it can and should refuse to pass if the
+    // test source no longer compiles against this cell's API.
+    tasks.named("check") { dependsOn(tasks.named("compileGametestJava")) }
+}
+
 modSettings {
     clientOptions {
         fov = 90

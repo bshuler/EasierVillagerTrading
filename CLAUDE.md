@@ -232,14 +232,64 @@ failure mode).
 ./gradlew ":1.21.4-fabric:test" --tests "*LoadedGameTest"
 ```
 
+### Client gametests (Tier 3)
+
+`src/gametest/java/.../EasierVillagerTradingClientGameTest.java` launches a
+**real Minecraft client** (window, GL context, render thread, integrated
+server), walks up to a real wandering trader, presses the real use key and
+trades. It is the only tier that touches `mixins/` or `BetterGuiMerchant` at
+all — everything else in this repo is green on a build where both injectors
+silently failed to apply, because **a mixin that does not apply is a runtime
+event, not a compile error**.
+
+Runs on `1.21.4-fabric` and `26.2-fabric` only; the older Fabric cells predate
+`fabric-client-gametest-api-v1` and no loader-side equivalent is reachable from
+Architectury Loom for Forge/NeoForge. Gated by `clientGameTestSupported` in
+`build.gradle.kts`.
+
+```bash
+unset JAVA_HOME   # 26.x needs the foojay-provisioned Java 25 - see below
+./gradlew :1.21.4-fabric:runClientGameTest
+./gradlew :26.2-fabric:runClientGameTest
+```
+
+Three things to know before touching it:
+
+- **`runCommand` swallows command failures.** A mis-staged world produces a
+  green tick. The 26.2 game-rule rename (`doDaylightCycle` → `advance_time`,
+  `doFireTick` → the *integer* `fire_spread_radius_around_player`, and four
+  more) was caught only by reading the server console on a passing run. Read
+  the log; do not trust the exit code. Full table in `PLAN.md`.
+- **The trade button's own click is not driven** — `postButtonClick` is
+  private, the buttons carry no text, and synthesising a click would hardcode
+  version-varying geometry. The test calls `AutoTrade.trade(index)` directly,
+  so `MerchantScreenMixin`'s wiring is covered only by a reflection check on
+  the loaded `MerchantScreen`. Ctrl-click and the shift-repeat loop are
+  uncovered.
+- **The offer is picked at runtime.** Wandering trader offers are rolled, not
+  seed-fixed; do not "simplify" this into a hardcoded index.
+
+Both negative controls (mixin applies but never substitutes; `trade()`
+no-ops) were actually run and produce the correct, distinct diagnoses — see
+`PLAN.md`.
+
+CI: `.github/workflows/build.yml` runs `chiseledBuild` over all ten cells plus
+an xvfb client-gametest matrix over the two supported ones.
+
 **Folia**: n/a — this is a 100% client-side mod with no server component.
 
-Only JDK available in this environment is **Temurin 21**
-(`/Library/Java/JavaVirtualMachines/temurin-21.jdk`). Older MC versions need
-older Java at *runtime* (1.18.2/1.19.4 → Java 17) but Loom/NeoGradle/ForgeGradle
-toolchains handle that via Gradle's Java toolchain auto-provisioning
-(foojay-resolver, downloads into `~/.gradle/jdks`) — never install a system
+The only JDK *installed system-wide* here is **Temurin 21**
+(`/Library/Java/JavaVirtualMachines/temurin-21.jdk`). Every other JDK this
+matrix needs is provisioned by Gradle's toolchain resolver (foojay, downloads
+into `~/.gradle/jdks`) — older MC versions need older Java at runtime
+(1.18.2/1.19.4 → Java 17), and **26.x needs Java 25**. Never install a system
 JDK, never touch Homebrew for this.
+
+**Do not `export JAVA_HOME` before running Gradle in this repo.** That pins the
+*daemon's* JVM, not just the toolchain, and pinning it to 21 breaks the 26.x
+cells. `unset JAVA_HOME` and let the wrapper pick. (The plugin repos in this
+same tree are the opposite case and do want Temurin 21 pinned — do not carry
+that habit across.)
 
 ## Porting notes for whoever (human or AI) continues this
 

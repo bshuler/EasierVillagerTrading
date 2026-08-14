@@ -659,9 +659,132 @@ A loaded *game*, not a loaded *client*: there is no window, no render pass, no
 `BetterGuiMerchant` itself remain untested and excluded, exactly as the coverage
 table above says. What changed is that the vanilla contracts they are built on
 are now pinned per cell. Driving the actual screen needs Tier 3 (Fabric client
-gametest + xvfb), still open.
+gametest + xvfb), **now landed — see below**.
 
 **NeoForge and Forge cells have no equivalent** — not an oversight. NeoForge's
 loaded-test path is ModDevGradle-only and this repo builds on Architectury Loom;
 Forge has nothing comparable at all. See the junit-fml comment in
 `build.gradle.kts`.
+
+## Tier 3: client gametest (added 2026-08-14)
+
+`src/gametest/java/.../EasierVillagerTradingClientGameTest.java` runs the mod in
+a **real Minecraft client** — real window, GL context, render thread, integrated
+server — walks up to a real wandering trader, presses the real use key, and
+trades.
+
+This is the only tier that can say anything at all about the part of this repo
+that *is* the mod. Everything under `mixins/` and `BetterGuiMerchant` sits on the
+JaCoCo exclusion list because it cannot be constructed headless, and — the point
+that matters — **a mixin that fails to apply is a runtime event, not a compile
+error**. Every other tier here is green on a build where both injectors silently
+missed. Tier 1 pins the vanilla contracts the algorithm stands on; Tier 3 is what
+proves the algorithm is *reached*.
+
+### Where it runs
+
+| Cell | Fabric API | Tier 3 |
+|---|---|---|
+| `26.2-fabric` | 6.0.0 | ✅ |
+| `1.21.4-fabric` | 4.1.1 | ✅ |
+| `1.20.1-fabric`, `1.19.4-fabric`, `1.18.2-fabric` | — | ⛔ `fabric-client-gametest-api-v1` first appears around fabric-api 0.106 / MC 1.21.2 |
+| all NeoForge / Forge cells | — | ⛔ no equivalent reachable from Architectury Loom |
+
+Gated in `build.gradle.kts` by `clientGameTestSupported`, which is
+`mod.isFabric && stonecutter.eval(current, ">=1.21.4")`.
+
+### What it asserts
+
+1. The client boots with `easiervillagertrading` loaded (otherwise everything
+   below passes vacuously).
+2. `MerchantScreenMixin`'s handler is present on the **loaded** `MerchantScreen`
+   class, by reflection over `getDeclaredMethods()` and a substring match on
+   `tradeOnSetRecipeIndex` (substring, because Mixin renames handlers).
+3. The config default (`swapShiftBehavior == false`) makes `trade()` run exactly
+   one transaction with no key held — so the expected end state is exact.
+4. A wandering trader is genuinely in the crosshair before anything is measured.
+5. Pressing **the real use key** opens `BetterGuiMerchant`, not vanilla's
+   `MerchantScreen` — i.e. `GuiMerchantMixin` substituted the screen.
+6. One trade executes end to end: the cost leaves the inventory, the result
+   arrives, in the exact counts of the offer that was actually rolled.
+
+The player is given **twice** the cost deliberately: at exactly the cost,
+`fillSlot`'s put-back branch never runs.
+
+The offer is **chosen at runtime**, not hardcoded — wandering trader offers are
+rolled, not seed-fixed. Both cells demonstrate this: the same test picked
+`1 emerald → 2 small dripleaf`, `1 emerald → 3 red dye` and
+`1 emerald → 2 pointed dripstone` across three 1.21.4 runs, and
+`1 milk bucket → 2 emeralds` on 26.2.
+
+Since both mixins are `"required": true`, reaching `BetterGuiMerchant` in a live
+client proves both resolved.
+
+### What it does *not* cover — stated plainly
+
+The trade button's own click is **not** driven. `postButtonClick` is private in
+vanilla, the trade buttons carry no text so `clickScreenButton` cannot reach
+them, and synthesising a mouse click would hardcode widget geometry that varies
+by version. The test therefore calls `AutoTrade.trade(index)` directly. So:
+
+- `MerchantScreenMixin`'s click→`trade()` wiring is covered only by the
+  reflection check in (2), not by an actual click. That check is load-bearing.
+- The ctrl-click "prepare only" bypass and the shift-click repeat loop are
+  **uncovered**.
+
+### Negative controls — run, not asserted
+
+Both were applied to the real source, run, and reverted:
+
+| Sabotage | Result |
+|---|---|
+| `GuiMerchantMixin`: `MenuType.MERCHANT` → `MenuType.ANVIL` (mixin still applies, never substitutes) | Fails: *"pressing the use key on a wandering trader did not open BetterGuiMerchant. Screen actually open: …MerchantScreen. GuiMerchantMixin's handler IS present…"* — correctly distinguishes "mixin missing" from "mixin present, branch not taken" |
+| `BetterGuiMerchant.trade()` returns immediately | Fails: *"the trade did not deliver its result… BetterGuiMerchant.trade ran to completion without throwing, so this is the slot-click protocol failing…"* |
+
+Reverting each restored green.
+
+### The 26.2 game-rule rename — and how nearly it was missed
+
+`TestServerContext#runCommand` **swallows command failures**. On the first 26.2
+run all six `gamerule` commands in `WORLD_SETUP` came back `Incorrect argument
+for command` on the server console while the test reported BUILD SUCCESSFUL.
+
+26.2 renamed every game rule to snake_case and moved the registry from
+`net.minecraft.world.level.GameRules` to
+`net.minecraft.world.level.gamerules.GameRules`. Three changed identity, not just
+spelling:
+
+| ≤1.21.4 | 26.2 |
+|---|---|
+| `sendCommandFeedback` | `send_command_feedback` |
+| `doDaylightCycle` | `advance_time` |
+| `doWeatherCycle` | `advance_weather` |
+| `doMobSpawning` | `spawn_mobs` |
+| `randomTickSpeed` | `random_tick_speed` |
+| `doFireTick` (boolean) | `fire_spread_radius_around_player` (**integer**, default 128, min −1; "off" is `0`) |
+
+Read off the real 26.2 jar's `GameRules.<clinit>`, where each id string is
+followed by the `putstatic` naming its field. Fixed behind a Stonecutter
+`//? if <26.2` split; both cells re-run and verified from the console, not the
+exit code.
+
+**The same bug was present in the sibling repo ToroHealth** and fixed there in
+the same pass. It is recorded here because the lesson generalises: on this tier,
+BUILD SUCCESSFUL is necessary and not sufficient — read the server log.
+
+### CI
+
+`.github/workflows/build.yml` — the first CI this repo has ever had. Two jobs:
+`chiseledBuild` over all ten cells, and an xvfb `client-gametest` matrix over the
+two supported ones, uploading screenshots and logs on pass *and* fail.
+
+### Running it locally
+
+```bash
+unset JAVA_HOME   # 26.x needs the foojay-provisioned Java 25
+./gradlew :1.21.4-fabric:runClientGameTest
+./gradlew :26.2-fabric:runClientGameTest
+```
+
+Screenshots land in `versions/<cell>/build/run/clientGameTest/screenshots/`.
+Look at them.
