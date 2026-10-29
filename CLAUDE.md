@@ -140,7 +140,7 @@ its Quilted Fabric API compatibility layer, so every Fabric jar this repo
 produces is already Quilt-compatible — there is nothing extra to build or
 port for Quilt specifically.
 
-**Single merged jar (Forgix)**: investigated per Bert's request and not
+**Single merged jar (Forgix)**: investigated per Human's request and not
 wired in this pass — see `PLAN.md` § "Single merged jar (Forgix)" for the
 live-verified findings (plugin is actively released, but its documented
 usage assumes static per-loader subprojects rather than Stonecutter's

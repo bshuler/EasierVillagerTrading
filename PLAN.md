@@ -113,7 +113,7 @@ this next):
 
 ## Single merged jar (Forgix) — investigated, not wired in this pass
 
-Bert asked for "one jar that works on all loaders" where possible, via the
+Human asked for "one jar that works on all loaders" where possible, via the
 **Forgix** Gradle plugin (`PacifistMC/Forgix`), which merges per-loader jars
 into a single combined artifact by repackaging classes so each loader only
 loads its own package.
