@@ -75,7 +75,11 @@ public class LoadedGameTest {
         // (Guarded at 26.1 because that is where this matrix's 26.x line
         // starts - there is no cell between 1.21.4 and 26.2 to narrow it
         // further, and 1.21.4 demonstrably does not need it.)
-        //? if >=26.1 {
+        //? if >=26.3 {
+        /*net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS
+                .build(net.minecraft.data.registries.VanillaRegistries.createWorldLookup())
+                .forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
+        *///?} elif >=26.1 {
         /*net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS
                 .build(net.minecraft.data.registries.VanillaRegistries.createLookup())
                 .forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);

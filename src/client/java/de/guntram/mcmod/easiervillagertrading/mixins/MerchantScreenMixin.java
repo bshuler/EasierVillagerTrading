@@ -76,7 +76,12 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
     private boolean isControlKeyDown() {
         return Screen.hasControlDown();
     }
-    //?} else {
+    //?} elif >=26.3 {
+    /*private boolean isControlKeyDown() {
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL)
+                || com.mojang.blaze3d.platform.InputConstants.isKeyDown(com.mojang.blaze3d.platform.InputConstants.KEY_RCONTROL);
+    }
+    *///?} else {
     /*private boolean isControlKeyDown() {
         com.mojang.blaze3d.platform.Window window = net.minecraft.client.Minecraft.getInstance().getWindow();
         return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL)

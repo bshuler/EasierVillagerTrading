@@ -92,7 +92,12 @@ public class BetterGuiMerchant extends MerchantScreen implements AutoTrade {
     private boolean isShiftKeyDown() {
         return hasShiftDown();
     }
-    //?} else {
+    //?} elif >=26.3 {
+    /*private boolean isShiftKeyDown() {
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT)
+                || com.mojang.blaze3d.platform.InputConstants.isKeyDown(com.mojang.blaze3d.platform.InputConstants.KEY_RSHIFT);
+    }
+    *///?} else {
     /*private boolean isShiftKeyDown() {
         com.mojang.blaze3d.platform.Window window = net.minecraft.client.Minecraft.getInstance().getWindow();
         return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT)

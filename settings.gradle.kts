@@ -40,6 +40,7 @@ stonecutter {
         // (Gradle 9.7.0 + this same Stonecraft/Loom stack) builds 26.2-fabric
         // and 26.2-neoforge green - see that repo's PLAN.md - so this is no
         // longer speculative.
+        mc("26.3", "fabric", "neoforge")
         mc("26.2", "fabric", "neoforge")
 
         // 1.21.4 - Fabric + NeoForge (last classic-numbered Yarn-mapped target)
