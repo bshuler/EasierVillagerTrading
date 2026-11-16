@@ -119,12 +119,26 @@ Newest stable Minecraft version per the Fabric meta API
 (`https://meta.fabricmc.net/v2/versions/game`, first `"stable": true` entry —
 **do not trust training-data memory here**, Mojang moved to calendar
 versioning (`26.x`) partway through 2025/2026, so "1.21 is latest" is stale
-knowledge). At the time this was written, newest stable = **26.2**.
+knowledge). At the time this was updated, newest stable = **26.3** (19 MC versions, 38 cells).
 
 | MC version | Fabric | NeoForge | Forge |
 |---|---|---|---|
-| 26.2 (newest stable) | target | target | — (NeoForge only, post-split) |
+| 26.3 (newest stable) | target | target | — (NeoForge only, post-split) |
+| 26.2 | target | target | — |
+| 26.1.2 | target | target | — |
+| 26.1.1 | target | target | — |
+| 26.1 | target | target | — |
+| 1.21.11 | target | target | — |
+| 1.21.10 | target | target | — |
+| 1.21.9 | target | target | — |
+| 1.21.8 | target | target | — |
+| 1.21.7 | target | target | — |
+| 1.21.6 | target | target | — |
+| 1.21.5 | target | target | — |
 | 1.21.4 | target | target | — |
+| 1.21.1 | target | target | — |
+| 1.20.6 | target | target | — |
+| 1.20.4 | target | — | target |
 | 1.20.1 | target | — | target |
 | 1.19.4 | target | — | target |
 | 1.18.2 | target | — | target |
@@ -215,7 +229,7 @@ failure mode).
   equivalent bootstrap is `junit-fml`, and its supported loaded-test harness is
   ModDevGradle-only — unavailable under Architectury Loom. See the exclusion
   comment in `build.gradle.kts`.
-- Verified green on **all 5 Fabric cells**, 8 tests each, read from
+- Verified green on **all 19 Fabric cells**, 8 tests each, read from
   `versions/*/build/test-results/test/TEST-*LoadedGameTest.xml`. Bootstrap costs
   ~20–31s per cell.
 - Unlike the rest of the suite, this file **must compile on every cell**, since
@@ -273,8 +287,8 @@ Both negative controls (mixin applies but never substitutes; `trade()`
 no-ops) were actually run and produce the correct, distinct diagnoses — see
 `PLAN.md`.
 
-CI: `.github/workflows/build.yml` runs `chiseledBuild` over all ten cells plus
-an xvfb client-gametest matrix over the two supported ones.
+CI: `.github/workflows/build.yml` runs `chiseledBuild` over all 38 cells plus
+an xvfb client-gametest matrix over `1.21.4-fabric`, `26.2-fabric`, and `26.3-fabric`.
 
 **Folia**: n/a — this is a 100% client-side mod with no server component.
 

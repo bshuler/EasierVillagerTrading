@@ -27,7 +27,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
-//? if <26.2 {
+//? if <26.1 {
 import net.minecraft.world.inventory.ClickType;
 //?} else {
 /*import net.minecraft.world.inventory.ContainerInput;
@@ -61,7 +61,7 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
         if (isControlKeyDown()) {
             return;
         }
-        //? if <26.2 {
+        //? if <26.1 {
         this.slotClicked(null, 0, 0, ClickType.QUICK_MOVE);
         this.slotClicked(null, 1, 0, ClickType.QUICK_MOVE);
         //?} else {
@@ -72,7 +72,7 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
         ((AutoTrade) this).trade(shopItem);
     }
 
-    //? if <26.2 {
+    //? if <1.21.9 {
     private boolean isControlKeyDown() {
         return Screen.hasControlDown();
     }

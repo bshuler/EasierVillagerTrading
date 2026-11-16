@@ -35,21 +35,31 @@ stonecutter {
         // split). Quilt is not a separate cell - it runs Fabric jars natively.
 
         // Newest stable Minecraft per https://meta.fabricmc.net/v2/versions/game
-        // (checked live - do not trust training-data memory) is 26.2. The
-        // house template critical-orientation proved this whole toolchain
-        // (Gradle 9.7.0 + this same Stonecraft/Loom stack) builds 26.2-fabric
-        // and 26.2-neoforge green - see that repo's PLAN.md - so this is no
-        // longer speculative.
+        // (checked live - do not trust training-data memory) is 26.3.
         mc("26.3", "fabric", "neoforge")
         mc("26.2", "fabric", "neoforge")
+        mc("26.1.2", "fabric", "neoforge")
+        mc("26.1.1", "fabric", "neoforge")
+        mc("26.1", "fabric", "neoforge")
 
-        // 1.21.4 - Fabric + NeoForge (last classic-numbered Yarn-mapped target)
+        // 1.21.x - Fabric + NeoForge
+        mc("1.21.11", "fabric", "neoforge")
+        mc("1.21.10", "fabric", "neoforge")
+        mc("1.21.9", "fabric", "neoforge")
+        mc("1.21.8", "fabric", "neoforge")
+        mc("1.21.7", "fabric", "neoforge")
+        mc("1.21.6", "fabric", "neoforge")
+        mc("1.21.5", "fabric", "neoforge")
         mc("1.21.4", "fabric", "neoforge")
-        // 1.20.1 - Fabric + Forge (last major Forge version before NeoForge split)
+        mc("1.21.1", "fabric", "neoforge")
+
+        // 1.20.6 - Fabric + NeoForge (first NeoForge-only 1.20.x release)
+        mc("1.20.6", "fabric", "neoforge")
+
+        // 1.20.4 and older - Fabric + Forge
+        mc("1.20.4", "fabric", "forge")
         mc("1.20.1", "fabric", "forge")
-        // 1.19.4 - Fabric + Forge
         mc("1.19.4", "fabric", "forge")
-        // 1.18.2 - Fabric + Forge
         mc("1.18.2", "fabric", "forge")
 
         vcsVersion = "1.21.4-fabric"

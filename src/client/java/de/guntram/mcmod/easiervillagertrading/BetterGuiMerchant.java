@@ -44,7 +44,7 @@ package de.guntram.mcmod.easiervillagertrading;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
-//? if <26.2 {
+//? if <26.1 {
 import net.minecraft.world.inventory.ClickType;
 //?} else {
 /*import net.minecraft.world.inventory.ContainerInput;
@@ -88,7 +88,7 @@ public class BetterGuiMerchant extends MerchantScreen implements AutoTrade {
         }
     }
 
-    //? if <26.2 {
+    //? if <1.21.9 {
     private boolean isShiftKeyDown() {
         return hasShiftDown();
     }
@@ -171,7 +171,7 @@ public class BetterGuiMerchant extends MerchantScreen implements AutoTrade {
         // AbstractContainerMenu checks:
         //    if (actionType == ClickType.SWAP && clickData >= 0 && clickData < 9)
         // so this is a NOP on (a normal) server, but our mixin can watch for it and force an inventory resend.
-        //? if <26.2 {
+        //? if <26.1 {
         this.slotClicked(null, /* slot*/ 0, /* clickData*/ 99, ClickType.SWAP);
         //?} else {
         /*this.slotClicked(null, 0, 99, ContainerInput.SWAP);
@@ -263,7 +263,7 @@ public class BetterGuiMerchant extends MerchantScreen implements AutoTrade {
     }
 
     private void slotClick(int slot) {
-        //? if <26.2 {
+        //? if <26.1 {
         this.slotClicked(null, slot, 0, ClickType.PICKUP);
         //?} else {
         /*this.slotClicked(null, slot, 0, ContainerInput.PICKUP);

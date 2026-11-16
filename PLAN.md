@@ -10,22 +10,36 @@ in `critical-orientation`.
 ## Target matrix & status
 
 Newest stable MC version per `https://meta.fabricmc.net/v2/versions/game`
-at time of writing: **26.2** (Mojang moved Java Edition to calendar
+at time of updating: **26.3** (Mojang moved Java Edition to calendar
 versioning during 2025/2026; `1.21.x` is no longer latest — verified live,
 not from training memory).
 
 | MC version | Fabric | NeoForge | Forge |
 |---|---|---|---|
+| 26.3 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
 | 26.2 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 26.1.2 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 26.1.1 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 26.1 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.11 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.10 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.9 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.8 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.7 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.6 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.5 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
 | 1.21.4 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.21.1 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.20.6 | ✅ full feature | ✅ full feature | n/a (NeoForge-era) |
+| 1.20.4 | ✅ full feature | n/a (pre-split) | ✅ full feature |
 | 1.20.1 | ✅ full feature | n/a (pre-split) | ✅ full feature |
 | 1.19.4 | ✅ full feature | n/a | ✅ full feature |
 | 1.18.2 | ✅ full feature | n/a | ✅ full feature |
 
 Legend: ☐ not started · 🔶 in progress · ✅ green build · ⛔ blocked (see notes)
 
-**All 10 cells are ✅ green with full feature parity** (`./gradlew
-chiseledBuild` — `BUILD SUCCESSFUL`, 10 jars produced under
+**All 38 cells (19 MC versions × 2 loaders) are ✅ green with full feature parity**
+(`./gradlew chiseledBuild` — `BUILD SUCCESSFUL`, 38 jars produced under
 `versions/*/build/libs/`) **including tests and coverage on
 every cell.** Since Phase 2 wired real JUnit tests into every cell's `test`
 task, `chiseledBuild`'s full task graph (`build` → `check` → `test`)
